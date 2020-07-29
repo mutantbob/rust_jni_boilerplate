@@ -244,7 +244,76 @@ pub fn jni_boilerplate_instance_method_invocation(
 
     body.push_str(rust_name);
 
-    body.push_str("(je: &JNIEnv, java_this: JObject, ");
+    body.push_str("(&self, je: &jni::JNIEnv, ");
+    body.push_str(&function_argument_declaration_text(&argument_types));
+    body.push(')');
+
+    body.push_str(" -> Result<");
+
+    match &return_type_str {
+        None => body.push_str("()"),
+        Some(type_str) => body.push_str(&type_str),
+    }
+    body.push_str(", jni::errors::Error>\n");
+
+    body.push_str("{\n");
+    //body.push_str("extern crate jni_boilerplate_helper;\n"); // this doesn't seem to help
+    body.push_str(
+        "use jni_boilerplate_helper::{JavaSignatureFor,ConvertRustToJValue,ConvertJValueToRust};\n",
+    );
+    body.push_str("let sig = \n");
+    body.push_str(&jni_method_signature_string(
+        &argument_types,
+        &return_type_str,
+    ));
+    body.push_str(";\n");
+
+    let returns_void = return_type_str.is_none();
+
+    if !returns_void {
+        body.push_str("let results = ");
+    }
+    body.push_str("je.call_method(self.java_this, \"");
+    body.push_str(java_name);
+    body.push_str("\", sig, &[");
+    for i in 0..argument_types.len() {
+        //for (i, arg_type) in macro_args.signature.inputs.iter().enumerate() {
+        if i > 0 {
+            body.push_str(", ");
+        }
+        body.push_str("arg");
+        body.push_str(&i.to_string());
+        body.push_str(".into_jvalue::<");
+        body.push_str(">(je)");
+    }
+    body.push_str("])");
+
+    body.push_str("?;\n");
+    if returns_void {
+        body.push_str("Ok(())\n");
+    } else {
+        body.push_str("results.into_rust(je)\n");
+    }
+
+    body.push_str("}\n");
+
+    if false {
+        println!("{}", body);
+    }
+    body
+}
+
+pub fn jni_boilerplate_unwrapped_instance_method_invocation(
+    rust_name: &str,
+    java_name: &str,
+    argument_types: &[String],
+    return_type_str: &Option<String>,
+) -> String {
+    let mut body: String = String::from("pub fn ");
+
+    body.push_str(rust_name);
+
+    body.push_str("(je: &jni::JNIEnv, java_this: jni::objects::JObject, ");
     body.push_str(&function_argument_declaration_text(&argument_types));
     body.push(')');
 

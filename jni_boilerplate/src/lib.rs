@@ -11,7 +11,10 @@ use std::any::Any;
 use syn::parse::{Parse, ParseStream};
 use syn::{ReturnType, Type, TypeBareFn};
 
-use jni_boilerplate_helper::jni_boilerplate_instance_method_invocation;
+use jni_boilerplate_helper::{
+    jni_boilerplate_instance_method_invocation,
+    jni_boilerplate_unwrapped_instance_method_invocation,
+};
 
 //
 
@@ -63,6 +66,35 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     };
 
     let body = jni_boilerplate_instance_method_invocation(
+        &rust_name,
+        &java_name,
+        &argument_types,
+        &return_type_str,
+    );
+
+    body.parse().unwrap()
+}
+
+#[proc_macro]
+pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
+    let macro_args = syn::parse_macro_input!(t_stream as Arguments);
+
+    let rust_name = macro_args.rust_name.to_string();
+    let java_name = macro_args.java_name.to_string();
+
+    let argument_types: Vec<String> = macro_args
+        .signature
+        .inputs
+        .iter()
+        .map(|arg_type| type_to_string(&arg_type.ty))
+        .collect();
+
+    let return_type_str: Option<String> = match &macro_args.signature.output {
+        ReturnType::Default => None,
+        ReturnType::Type(_, ty) => Some(type_to_string(&ty)),
+    };
+
+    let body = jni_boilerplate_unwrapped_instance_method_invocation(
         &rust_name,
         &java_name,
         &argument_types,
