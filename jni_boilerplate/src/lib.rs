@@ -141,26 +141,29 @@ struct ConstructorMacroArgs {
 
 impl Parse for ConstructorMacroArgs {
     fn parse(tokens: ParseStream) -> Result<ConstructorMacroArgs, syn::Error> {
-        let mut class_name = String::new();
+        let ident: Ident = tokens.parse()?;
+        let class_name = ident.to_string();
 
-        loop {
+        let (constructor_name, mut class_name) = if tokens.peek(Token![=]) {
+            let _eq: Token![=] = tokens.parse()?;
+            let constructor_name = class_name;
             let ident: Ident = tokens.parse()?;
-            class_name.push_str(&ident.to_string());
+            let class_name = ident.to_string();
+            (constructor_name, class_name)
+        } else {
+            (String::from("new"), class_name)
+        };
+        // class name is separated by dots in java code, but by slashes in JNI lookups. *facepalm*
+        loop {
             if tokens.peek(Token![.]) {
                 let _dot: Token![.] = tokens.parse()?;
                 class_name.push_str("/"); // yeah, JNI is weird
             } else {
                 break;
             }
+            let ident: Ident = tokens.parse()?;
+            class_name.push_str(&ident.to_string());
         }
-
-        let constructor_name = if tokens.peek(Token![=]) {
-            let _eq: Token![=] = tokens.parse()?;
-            let cn: Ident = tokens.parse()?;
-            cn.to_string()
-        } else {
-            String::from("new")
-        };
 
         let mut argument_types: Vec<Type> = Vec::new();
 
@@ -184,6 +187,28 @@ impl Parse for ConstructorMacroArgs {
     }
 }
 
+///
+/// This allows you to define a class method that builds an instance of a wrapper class by calling a java constructor and wrapping the resulting JObject using the <code>Self::wrap_object()</code> method.
+/// For example:
+/// <pre>
+/// struct Widget&lt;'a&gt; {
+///     java_this: JObject&lt;'a&gt;,
+/// }
+/// impl&lt;'a&gt; Widget&lt;'a&gt; {
+///     fn wrap_jobject(java_this: JObject&lt;'a&gt;) -&gt; Widget&lt;'a&gt;
+///     {
+///         Widget {
+///             java_this,
+///         }
+///     }
+///
+///     // define a rust function named new
+///     jni_constructor! { com.purplefrog.rust_callables.Widget () }
+///     // since java supports overloaded methods and constructors while rust does not, you can name the function something other than new
+///     jni_constructor! { new_one=com.purplefrog.rust_callables.Widget (&amp;str) }
+/// ...
+/// </pre>
+///
 #[proc_macro]
 pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as ConstructorMacroArgs);
@@ -197,7 +222,7 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 
     let class_name: &str = &macro_args.class_name;
 
-    let body =
+    let body: String =
         jni_boilerplate_constructor_invocation(class_name, constructor_name, &argument_types);
 
     body.parse().unwrap()
