@@ -195,6 +195,14 @@ impl<'a> ConvertRustToJValue<'a> for &str {
     }
 }
 
+//
+
+pub trait JavaConstructible<'a, T> {
+    fn wrap_jobject(jo: JObject<'a>) -> T;
+}
+
+//
+
 pub fn function_argument_declaration_text(inputs: &[String]) -> String {
     let mut rval = String::new();
     for (idx, type_str) in inputs.iter().enumerate() {
@@ -232,6 +240,22 @@ pub fn jni_method_signature_string(
     };
 
     rval
+}
+
+pub fn jni_argument_array(count: usize) -> String {
+    let mut body = String::from("&[");
+    for i in 0..count {
+        if i > 0 {
+            body.push_str(", ");
+        }
+        body.push_str("arg");
+        body.push_str(&i.to_string());
+        body.push_str(".into_jvalue::<");
+        body.push_str(">(je)");
+    }
+    body.push_str("]");
+
+    body
 }
 
 pub fn jni_boilerplate_instance_method_invocation(
@@ -275,18 +299,9 @@ pub fn jni_boilerplate_instance_method_invocation(
     }
     body.push_str("je.call_method(self.java_this, \"");
     body.push_str(java_name);
-    body.push_str("\", sig, &[");
-    for i in 0..argument_types.len() {
-        //for (i, arg_type) in macro_args.signature.inputs.iter().enumerate() {
-        if i > 0 {
-            body.push_str(", ");
-        }
-        body.push_str("arg");
-        body.push_str(&i.to_string());
-        body.push_str(".into_jvalue::<");
-        body.push_str(">(je)");
-    }
-    body.push_str("])");
+    body.push_str("\", sig, ");
+    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(")");
 
     body.push_str("?;\n");
     if returns_void {
@@ -344,18 +359,9 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     }
     body.push_str("je.call_method(java_this, \"");
     body.push_str(java_name);
-    body.push_str("\", sig, &[");
-    for i in 0..argument_types.len() {
-        //for (i, arg_type) in macro_args.signature.inputs.iter().enumerate() {
-        if i > 0 {
-            body.push_str(", ");
-        }
-        body.push_str("arg");
-        body.push_str(&i.to_string());
-        body.push_str(".into_jvalue::<");
-        body.push_str(">(je)");
-    }
-    body.push_str("])");
+    body.push_str("\", sig, ");
+    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(")");
 
     body.push_str("?;\n");
     if returns_void {
@@ -369,5 +375,42 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     if false {
         println!("{}", body);
     }
+    body
+}
+
+//
+
+pub fn jni_boilerplate_constructor_invocation(
+    class_name: &str,
+    constructor_name: &str,
+    argument_types: &[String],
+) -> String {
+    let mut body = String::new();
+
+    body.push_str("pub fn ");
+    body.push_str(constructor_name);
+    body.push_str("(je: &jni::JNIEnv<'a>");
+
+    for (i, ty) in argument_types.iter().enumerate() {
+        body.push_str(", arg");
+        body.push_str(&i.to_string());
+        body.push_str(": ");
+        body.push_str(ty);
+    }
+
+    body.push_str(") -> Result<Self, jni::errors::Error> {\n");
+    body.push_str(
+        "use jni_boilerplate_helper::{JavaSignatureFor,ConvertRustToJValue,ConvertJValueToRust};\n",
+    );
+    body.push_str("let cls = je.find_class(\"");
+    body.push_str(class_name);
+    body.push_str("\")?;");
+    body.push_str("let rval = je.new_object(cls, ");
+    body.push_str(&jni_method_signature_string(&argument_types, &None));
+    body.push_str(", ");
+    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(")?;\n");
+    body.push_str("Ok(Self::wrap_jobject(rval))");
+    body.push_str("}\n");
     body
 }
