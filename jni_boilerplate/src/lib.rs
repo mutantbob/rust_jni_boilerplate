@@ -50,7 +50,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     let rust_name = macro_args.rust_name.to_string();
     let java_name = macro_args.java_name.to_string();
 
-    let argument_types = macro_args
+    let argument_types: Vec<String> = macro_args
         .signature
         .inputs
         .iter()
@@ -69,7 +69,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
         &return_type_str,
     );
 
-    return body.parse().unwrap();
+    body.parse().unwrap()
 }
 
 fn type_to_string(ty: &Type) -> String {
@@ -89,12 +89,12 @@ fn path_segments_to_string(path1: &syn::Path) -> String {
         Some(_) => String::from("::"),
         None => String::new(),
     };
-    let concat = path1.segments.iter().fold(prefix, |mut acc, v| {
-        if acc.len() > 0 {
+
+    path1.segments.iter().fold(prefix, |mut acc, v| {
+        if !acc.is_empty() {
             acc.push_str("::")
         }
         acc.push_str(&v.ident.to_string());
         acc
-    });
-    concat
+    })
 }

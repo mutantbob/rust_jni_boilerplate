@@ -183,7 +183,7 @@ impl<'a> ConvertRustToJValue<'a> for &[u8] {
     fn into_jvalue(self, je: &JNIEnv) -> JValue<'a> {
         let jba: jobject = je.byte_array_from_slice(self).unwrap();
         let jo = JObject::from(jba);
-        return jo.into();
+        jo.into()
     }
 }
 
@@ -191,11 +191,11 @@ impl<'a> ConvertRustToJValue<'a> for &str {
     fn into_jvalue(self, je: &JNIEnv<'a>) -> JValue<'a> {
         let str = je.new_string(self).unwrap();
         let jo: JObject = JObject::from(str);
-        return jo.into();
+        jo.into()
     }
 }
 
-pub fn function_argument_declaration_text(inputs: &Vec<String>) -> String {
+pub fn function_argument_declaration_text(inputs: &[String]) -> String {
     let mut rval = String::new();
     for (idx, type_str) in inputs.iter().enumerate() {
         if idx > 0 {
@@ -207,11 +207,11 @@ pub fn function_argument_declaration_text(inputs: &Vec<String>) -> String {
         rval.push_str(&type_str);
     }
 
-    return rval;
+    rval
 }
 
 pub fn jni_method_signature_string(
-    argument_types: &Vec<String>,
+    argument_types: &[String],
     return_type_str: &Option<String>,
 ) -> String {
     let mut rval = String::from("String::from(\"(\")");
@@ -231,13 +231,13 @@ pub fn jni_method_signature_string(
         }
     };
 
-    return rval;
+    rval
 }
 
 pub fn jni_boilerplate_instance_method_invocation(
     rust_name: &str,
     java_name: &str,
-    argument_types: &Vec<String>,
+    argument_types: &[String],
     return_type_str: &Option<String>,
 ) -> String {
     let mut body: String = String::from("pub fn ");
