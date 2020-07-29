@@ -5,12 +5,11 @@ extern crate jni_boilerplate_helper;
 extern crate proc_macro2;
 extern crate quote;
 
-use proc_macro::{Literal, TokenStream, TokenTree};
+use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use std::any::Any;
 use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{BareFnArg, Expr, ExprCall, ReturnType, Type, TypeBareFn};
+use syn::{ReturnType, Type, TypeBareFn};
 
 use jni_boilerplate_helper::jni_boilerplate_instance_method_invocation;
 

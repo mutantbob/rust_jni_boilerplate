@@ -94,7 +94,7 @@ pub trait ConvertJValueToRust<T> {
 }
 
 impl<'a> ConvertJValueToRust<char> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<char, jni::errors::Error> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<char, jni::errors::Error> {
         self.c().and_then(|c| match std::char::from_u32(c as u32) {
             None => Err(jni::errors::Error::from_kind(
                 jni::errors::ErrorKind::JavaException,
@@ -105,25 +105,25 @@ impl<'a> ConvertJValueToRust<char> for JValue<'a> {
 }
 
 impl<'a> ConvertJValueToRust<i8> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<i8, jni::errors::Error> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<i8, jni::errors::Error> {
         self.b()
     }
 }
 
 impl<'a> ConvertJValueToRust<i16> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<i16, jni::errors::Error> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<i16, jni::errors::Error> {
         self.s()
     }
 }
 
 impl<'a> ConvertJValueToRust<i32> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<i32, jni::errors::Error> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<i32, jni::errors::Error> {
         self.i()
     }
 }
 
 impl<'a> ConvertJValueToRust<i64> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<i64, jni::errors::Error> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<i64, jni::errors::Error> {
         self.j()
     }
 }
@@ -297,7 +297,7 @@ pub fn jni_boilerplate_instance_method_invocation(
 
     body.push_str("}\n");
 
-    if true {
+    if false {
         println!("{}", body);
     }
     body
