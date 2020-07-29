@@ -1,0 +1,16 @@
+[package]
+name = "jni_boilerplate"
+version = "0.1.0"
+authors = ["Robert Forsman <git@thoth.purplefrog.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+syn = { features=["full"] , path="../../../vendor/syn/"}
+quote = "*"
+proc-macro2 = "*"
+jni_boilerplate_helper = { path="../jni_boilerplate_helper" }
+
+[lib]
+proc-macro = true
