@@ -46,6 +46,10 @@ impl Parse for Arguments {
 
 //
 
+///
+/// example:
+/// <pre>jni_instance_method!{ fn_name[=java_name], fn([ arg_type1 [,arg_type2...]])[ ->return_type ] }
+/// </pre>
 #[proc_macro]
 pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as Arguments);

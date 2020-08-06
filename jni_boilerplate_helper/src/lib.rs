@@ -1,8 +1,9 @@
 extern crate jni;
 
-use jni::objects::{JObject, JValue};
-use jni::sys::jobject;
-use jni::JNIEnv;
+use jni::objects::{JObject, JValue, AutoLocal, JString};
+use jni::sys::{jobject, jbyteArray};
+use jni::{JNIEnv, AttachGuard};
+use std::fmt::Write;
 
 #[macro_export]
 macro_rules! jni_signature_single {
@@ -142,63 +143,73 @@ impl<'a> ConvertJValueToRust<String> for JValue<'a> {
 
 //
 
-pub trait ConvertRustToJValue<'a> {
-    fn into_jvalue(self, je: &JNIEnv<'a>) -> JValue<'a>;
+pub trait ConvertRustToJValue<'a, T> {
+    fn into_temporary(self, je:&JNIEnv<'a>) ->T;
+    fn temporary_into_jvalue(tmp: &T) -> JValue<'a>;
 }
 
 macro_rules! impl_convert_rust_to_jvalue {
     ( $($t:ty),* ) => {
-    $( impl<'a> ConvertRustToJValue<'a> for $t
+    $( impl<'a> ConvertRustToJValue<'a, $t> for $t
     {
-        fn into_jvalue(self, _je:&JNIEnv) -> JValue<'a>
+        fn into_temporary(self, _je:&JNIEnv<'a>) ->$t { self }
+        fn temporary_into_jvalue(tmp: &$t) -> JValue<'a>
         {
-        self.into()
+        (*tmp).into()
         }
     }) *
     }
 }
 
-impl_convert_rust_to_jvalue! { i8, i16, i32, i64 }
+impl_convert_rust_to_jvalue! { i8, i16, i32, i64, f32, f64 }
 
-impl<'a> ConvertRustToJValue<'a> for char {
-    fn into_jvalue(self, _je: &JNIEnv) -> JValue<'a> {
-        JValue::Char(self as u16)
+impl<'a> ConvertRustToJValue<'a, char> for char {
+    fn into_temporary(self, _je:&JNIEnv<'a>) ->char {self}
+    fn temporary_into_jvalue(tmp:&char) -> JValue<'a> {
+        JValue::Char((*tmp) as u16)
     }
 }
 
-impl<'a> ConvertRustToJValue<'a> for bool {
-    fn into_jvalue(self, _je: &JNIEnv) -> JValue<'a> {
-        JValue::Bool(self as u8)
+impl<'a> ConvertRustToJValue<'a, bool> for bool {
+    fn into_temporary(self, _je:&JNIEnv<'a>) ->bool {self}
+    fn temporary_into_jvalue(tmp:&bool) -> JValue<'a> {
+        JValue::Bool((*tmp) as u8)
     }
 }
 
-impl<'a> ConvertRustToJValue<'a> for &[i8] {
-    fn into_jvalue(self, je: &JNIEnv<'a>) -> JValue<'a> {
+impl<'a> ConvertRustToJValue<'a, jbyteArray> for &[i8] {
+    fn into_temporary(self, je:&JNIEnv<'a>) ->jbyteArray {
         let shenanigans = unsafe { &*(self as *const [i8] as *const [u8]) };
-        shenanigans.into_jvalue(je)
+        je.byte_array_from_slice(shenanigans).unwrap()
+    }
+    fn temporary_into_jvalue(tmp: &jbyteArray) -> JValue<'a> {
+        JObject::from(*tmp).into()
     }
 }
 
-impl<'a> ConvertRustToJValue<'a> for &[u8] {
-    fn into_jvalue(self, je: &JNIEnv) -> JValue<'a> {
-        let jba: jobject = je.byte_array_from_slice(self).unwrap();
-        let jo = JObject::from(jba);
-        jo.into()
+impl<'a> ConvertRustToJValue<'a, jbyteArray> for &[u8] {
+    fn into_temporary(self, je:&JNIEnv<'a>) ->jbyteArray {
+        je.byte_array_from_slice(self).unwrap()
+    }
+    fn temporary_into_jvalue(tmp: &jbyteArray) -> JValue<'a> {
+        JObject::from(*tmp).into()
     }
 }
 
-impl<'a> ConvertRustToJValue<'a> for &str {
-    fn into_jvalue(self, je: &JNIEnv<'a>) -> JValue<'a> {
-        let str = je.new_string(self).unwrap();
-        let jo: JObject = JObject::from(str);
+impl<'a> ConvertRustToJValue<'a, JString<'a>> for &str {
+    fn into_temporary(self, je:&JNIEnv<'a>) ->JString<'a> {
+        je.new_string(self).unwrap()
+    }
+    fn temporary_into_jvalue(tmp: &JString<'a>) -> JValue<'a> {
+        let jo: JObject = JObject::from(*tmp);
         jo.into()
     }
 }
 
 //
 
-pub trait JavaConstructible<'a, T> {
-    fn wrap_jobject(jo: JObject<'a>) -> T;
+pub trait JavaConstructible<'a> {
+    fn wrap_jobject(jni_env: &'a AttachGuard<'a>, java_this: AutoLocal<'a, 'a>) -> Self;
 }
 
 //
@@ -242,16 +253,13 @@ pub fn jni_method_signature_string(
     rval
 }
 
-pub fn jni_argument_array(count: usize) -> String {
+pub fn jni_argument_array(argument_types: &[String], _jni_env_variable_name: &str) -> String {
     let mut body = String::from("&[");
-    for i in 0..count {
+    for (i, arg_type) in argument_types.iter().enumerate() {
         if i > 0 {
             body.push_str(", ");
         }
-        body.push_str("arg");
-        body.push_str(&i.to_string());
-        body.push_str(".into_jvalue::<");
-        body.push_str(">(je)");
+        write!(body, "<{}>::temporary_into_jvalue(&tmp{})", arg_type, i).unwrap();
     }
     body.push_str("]");
 
@@ -268,7 +276,7 @@ pub fn jni_boilerplate_instance_method_invocation(
 
     body.push_str(rust_name);
 
-    body.push_str("(&self, je: &jni::JNIEnv, ");
+    body.push_str("(&self, ");
     body.push_str(&function_argument_declaration_text(&argument_types));
     body.push(')');
 
@@ -292,22 +300,24 @@ pub fn jni_boilerplate_instance_method_invocation(
     ));
     body.push_str(";\n");
 
+    body.push_str(&build_temporaries(argument_types, "&self.jni_env"));
+
     let returns_void = return_type_str.is_none();
 
     if !returns_void {
         body.push_str("let results = ");
     }
-    body.push_str("je.call_method(self.java_this, \"");
+    body.push_str("self.jni_env.call_method(self.java_this.as_obj(), \"");
     body.push_str(java_name);
     body.push_str("\", sig, ");
-    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(&jni_argument_array(argument_types, "&self.jni_env"));
     body.push_str(")");
 
     body.push_str("?;\n");
     if returns_void {
         body.push_str("Ok(())\n");
     } else {
-        body.push_str("results.into_rust(je)\n");
+        body.push_str("results.into_rust(&self.jni_env)\n");
     }
 
     body.push_str("}\n");
@@ -316,6 +326,14 @@ pub fn jni_boilerplate_instance_method_invocation(
         println!("{}", body);
     }
     body
+}
+
+fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> String {
+    let mut tmp = String::new();
+    for (i, _arg_type) in argument_types.iter().enumerate() {
+        write!(tmp, "let tmp{} = arg{}.into_temporary({});\n", i, i, jni_env_variable_name).unwrap();
+    }
+    tmp
 }
 
 pub fn jni_boilerplate_unwrapped_instance_method_invocation(
@@ -352,6 +370,8 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     ));
     body.push_str(";\n");
 
+    body.push_str(&build_temporaries(argument_types, "je"));
+
     let returns_void = return_type_str.is_none();
 
     if !returns_void {
@@ -360,7 +380,7 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     body.push_str("je.call_method(java_this, \"");
     body.push_str(java_name);
     body.push_str("\", sig, ");
-    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(&jni_argument_array(argument_types, "je"));
     body.push_str(")");
 
     body.push_str("?;\n");
@@ -389,7 +409,7 @@ pub fn jni_boilerplate_constructor_invocation(
 
     body.push_str("pub fn ");
     body.push_str(constructor_name);
-    body.push_str("(je: &jni::JNIEnv<'a>");
+    body.push_str("(je: &'a jni::AttachGuard<'a>");
 
     for (i, ty) in argument_types.iter().enumerate() {
         body.push_str(", arg");
@@ -402,15 +422,17 @@ pub fn jni_boilerplate_constructor_invocation(
     body.push_str(
         "use jni_boilerplate_helper::{JavaSignatureFor,ConvertRustToJValue,ConvertJValueToRust};\n",
     );
+    body.push_str(&build_temporaries(argument_types, "&je"));
+
     body.push_str("let cls = je.find_class(\"");
     body.push_str(class_name);
     body.push_str("\")?;");
     body.push_str("let rval = je.new_object(cls, ");
     body.push_str(&jni_method_signature_string(&argument_types, &None));
     body.push_str(", ");
-    body.push_str(&jni_argument_array(argument_types.len()));
+    body.push_str(&jni_argument_array(argument_types, "&je"));
     body.push_str(")?;\n");
-    body.push_str("Ok(Self::wrap_jobject(rval))");
+    body.push_str("Ok(Self::wrap_jobject(je, AutoLocal::new(&je, rval)))");
     body.push_str("}\n");
     body
 }
