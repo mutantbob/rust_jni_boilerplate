@@ -3,18 +3,19 @@ extern crate proc_macro;
 extern crate syn;
 extern crate jni_boilerplate_helper;
 extern crate proc_macro2;
+#[macro_use]
 extern crate quote;
 
-use proc_macro::TokenStream;
+use proc_macro::{TokenStream, Span, Literal};
 use proc_macro2::Ident;
 use std::any::Any;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{ReturnType, Type, TypeBareFn};
+use syn::{ReturnType, Type, TypeBareFn, TypeTuple, FnArg, PatType, Pat, PatIdent, TypePath, Path, PathSegment, PathArguments, AngleBracketedGenericArguments, GenericArgument, LitInt};
+use syn::token::Comma;
 
-use jni_boilerplate_helper::{
-    jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation,
-    jni_boilerplate_unwrapped_instance_method_invocation,
-};
+
+use jni_boilerplate_helper::{jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation, jni_boilerplate_unwrapped_instance_method_invocation, jni_method_signature_string};
+use syn::punctuated::Punctuated;
 
 //
 
@@ -229,5 +230,241 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let body: String =
         jni_boilerplate_constructor_invocation(class_name, constructor_name, &argument_types);
 
+    quote::quote! { pants };
+
     body.parse().unwrap()
+}
+
+//
+//
+//
+
+struct StaticMethodArgs
+{
+    rust_name: Ident,
+    java_name: String,
+    argument_types: Vec<Type>,
+    return_type: ReturnType,
+}
+
+impl<'a> Parse for StaticMethodArgs
+{
+    fn parse(tokens: &ParseBuffer) -> Result<Self, syn::Error> {
+        let function_name: Ident = tokens.parse()?;
+
+        let (rust_name, java_name) = if tokens.peek(Token![=]) {
+            let _eq: Token![=] = tokens.parse()?;
+
+            let ident: Ident = tokens.parse()?;
+            ( function_name, ident.to_string())
+        } else {
+            (function_name.clone(), function_name.to_string())
+        };
+
+        let mut argument_types: Vec<Type> = Vec::new();
+        let arg_types: ParseBuffer;
+        parenthesized!(arg_types in tokens);
+
+        while !arg_types.is_empty() {
+            let arg_type:Type = arg_types.parse()?;
+            argument_types.push(arg_type);
+            if !arg_types.is_empty() {
+                let _comma: Token![,] = arg_types.parse()?;
+            }
+        }
+
+        println!("do I get a return type?");
+
+        let return_type:ReturnType = if tokens.peek(Token![->]) {
+            println!("parse return type");
+            //let _arrow: Token![->] = tokens.parse()?;
+            let rval = tokens.parse()?;
+            println!("win");
+            rval
+        } else {
+            ReturnType::Default
+        };
+
+        Ok(StaticMethodArgs {
+            rust_name,
+            java_name,
+            argument_types,
+            return_type,
+        })
+    }
+}
+
+struct AllAboutArg
+{
+    a_type: Type,
+    type_string: String,
+    p_ident: Ident,
+    p_name: String,
+    tmp_ident: Ident,
+    tmp_name: String,
+}
+
+impl AllAboutArg
+{
+    pub fn new(arg_type:Type, index: usize)->AllAboutArg
+    {
+        let p_name = format!("arg{}", index);
+        let tmp_name =format!("tmp{}", index);
+        return AllAboutArg {
+            type_string: type_to_string(&arg_type),
+            a_type: arg_type,
+            p_ident: Ident::new(&p_name, Span::call_site().into()),
+            p_name,
+            tmp_ident: Ident::new(&tmp_name, Span::call_site().into()),
+            tmp_name,
+        }
+    }
+}
+
+#[proc_macro]
+pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
+    let macro_args = syn::parse_macro_input!(t_stream as StaticMethodArgs);
+
+    let rust_name = &macro_args.rust_name;
+    let java_name: &str = &macro_args.java_name;
+
+    let return_type:Type = match &macro_args.return_type
+    {
+        ReturnType::Default => {
+            let ts2:TokenStream = "()".parse().unwrap();
+            let blank:Type = syn::parse_macro_input!(ts2 as Type);
+            blank
+        },
+        ReturnType::Type(_, rt) => {
+            let rt:&Type = rt;
+            (*rt).clone()
+        }
+    };
+
+    println!("what now?");
+
+    let arg_types = &macro_args.argument_types;
+
+    let args_metadata:Vec<AllAboutArg> = arg_types.iter().enumerate()
+        .map(|(i,t)| AllAboutArg::new((*t).clone(), i))
+        .collect();
+
+    let mut arg_sig: syn::punctuated::Punctuated<FnArg, Comma>;
+    arg_sig = syn::punctuated::Punctuated::new();
+
+    for (arg) in &args_metadata {
+        let arg2 = named_function_argument(&arg.p_name, &arg.a_type);
+        arg_sig.push(arg2)
+    }
+
+
+    let arg_type_strings:Vec<String> = args_metadata.iter()
+        .map(|at| at.type_string.clone())
+        .collect();
+
+    println!("what now 2?");
+
+    let decl:Vec<proc_macro2::TokenStream> = args_metadata.iter()
+        .map( |metadata| {
+            let tmp_i = &metadata.tmp_ident;
+            let p_i = &metadata.p_ident;
+            quote!{let #tmp_i = #p_i.into_temporary(jni_env);}
+        } )
+        .collect();
+
+    let decl0 = {
+        let md0 = &args_metadata[0];
+        let tmp_0 = &md0.tmp_ident;
+        let p_0 = &md0.p_ident;
+        quote!{ let #tmp_0 = #p_0.into_temporary(jni_env); }
+    };
+    let decl0 = &decl[0];
+    let rtso:Option<String> = match &macro_args.return_type {
+        ReturnType::Default => None,
+        ReturnType::Type(_, bt) => Some(type_to_string(&*bt))
+    };
+
+    //let sig = jni_method_signature_string(&arg_type_strings, &rtso);
+    //let sig:syn::LitStr = syn::LitStr::new(&sig, Span::call_site().into());
+
+    let body = quote!{
+    pub fn #rust_name(jni_env: &jni::JNIEnv, #arg_sig) ->Result<#return_type, jni::errors::Error>
+    {
+        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
+                                     ConvertJValueToRust};
+
+        let cls = jni_env.find_class(&<Self>::java_class_name())?;
+        let cls = JClassWrapper {
+            jni_env: &jni_env,
+            cls,
+        };
+        jni_env.exception_check()?;
+
+        #(#decl)*
+        let sig = String::from("(")+#(&<#arg_types>::signature_for())+* + ")"+&<#return_type>::signature_for();
+
+        let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[<i32>::temporary_into_jvalue(&tmp0)])?;
+        jni_env.exception_check()?;
+
+        results.into_rust(jni_env)
+    }
+    };
+    //let pants = "#(arg#arg_indices.into_temporary(jni_env);),*";
+    //let tuple = (#(arg#arg_indices.into_temporary(jni_env);),*);
+    //#(let tmp#arg_indices = arg#arg_indices.into_temporary(jni_env);)*
+    body.into()
+}
+
+/*
+this is way more trouble than it is worth
+fn wrap_result_type(macro_args: &StaticMethodArgs) {
+    &macro_args.return_type;
+
+    let mut result_type_args = Punctuated::new();
+    result_type_args.push(GenericArgument::Type(match macro_args.return_type
+    {}));
+
+    let mut segments = Punctuated::new();
+
+    segments.push(PathSegment {
+        ident: Ident::new("Result", Span::call_site().into()),
+        arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+            colon2_token: None,
+            lt_token: syn::token::Lt(Span::call_site().into()),
+            args: result_type_args,
+            gt_token: Token![>](Span::call_site().into())
+        })
+    });
+    let tp: TypePath = TypePath {
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: segments,
+        }
+    };
+    let rt: Type = Type::Path(tp);
+    let return_type = ReturnType::Type(if let ReturnType::Type(arrow, _) = macro_args.return_type {
+        arrow
+    } else { Token![->](Span::call_site().into()) }, Box::new(rt));
+}
+*/
+
+fn named_function_argument(name: &str, arg_type: &Type) -> FnArg {
+    let arg_ident: PatIdent = PatIdent {
+        attrs: vec![],
+        by_ref: None,
+        mutability: None,
+        ident: Ident::new(name, Span::call_site().into()),
+        subpat: None
+    };
+    let pat_type: PatType = PatType {
+        attrs: vec![],
+        pat: Box::new(Pat::Ident(arg_ident)),
+        colon_token: syn::token::Colon {
+            spans: [Span::call_site().into()]
+        },
+        ty: Box::new((*arg_type).clone())
+    };
+    let arg2: syn::FnArg = FnArg::Typed(pat_type);
+    arg2
 }

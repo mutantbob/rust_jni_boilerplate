@@ -1,9 +1,29 @@
+#[macro_use]
 extern crate jni;
 
-use jni::objects::{JObject, JValue, AutoLocal, JString};
+use log::debug;
+
+use jni::objects::{JObject, JValue, AutoLocal, JString, JClass};
 use jni::sys::{jobject, jbyteArray};
 use jni::{JNIEnv, AttachGuard};
 use std::fmt::Write;
+
+pub struct JClassWrapper<'a, 'b>
+{
+    pub jni_env: &'a JNIEnv<'a>,
+    pub cls: JClass<'b>,
+}
+
+impl<'a, 'b> Drop for JClassWrapper<'a, 'b>
+{
+    fn drop(&mut self) {
+        let res = self.jni_env.delete_local_ref(*self.cls);
+        match res {
+            Ok(()) => {}
+            Err(e) => debug!("error dropping global ref: {:#?}", e),
+        }
+    }
+}
 
 #[macro_export]
 macro_rules! jni_signature_single {
@@ -72,19 +92,45 @@ impl JavaSignatureFor for f64 {
 
 impl JavaSignatureFor for &str {
     fn signature_for() -> String {
-        String::from("Ljava/lang/String;")
+        format!("L{};", <Self>::java_class_name())
     }
 }
 
 impl JavaSignatureFor for String {
     fn signature_for() -> String {
-        String::from("Ljava/lang/String;")
+        format!("L{};", <Self>::java_class_name())
     }
 }
 
 impl<T: JavaSignatureFor> JavaSignatureFor for &[T] {
     fn signature_for() -> String {
         String::from("[") + &T::signature_for()
+    }
+}
+
+impl<T: JavaSignatureFor> JavaSignatureFor for Vec<T> {
+    fn signature_for() -> String {
+        String::from("[") + &T::signature_for()
+    }
+}
+//
+
+pub trait JavaClassNameFor
+{
+    fn java_class_name() -> &'static str;
+}
+
+impl JavaClassNameFor for &str
+{
+    fn java_class_name() -> &'static str {
+        "java/lang/String"
+    }
+}
+
+impl JavaClassNameFor for String
+{
+    fn java_class_name() -> &'static str {
+        "java/lang/String"
     }
 }
 
@@ -138,6 +184,43 @@ impl<'a> ConvertJValueToRust<String> for JValue<'a> {
             Err(e) => panic!(e),
             Ok(rval) => Ok(String::from(rval)),
         }
+    }
+}
+
+fn vec_u8_into_i8(v: Vec<u8>) -> Vec<i8> {
+    // converse of https://stackoverflow.com/a/59707887/995935
+    // ideally we'd use Vec::into_raw_parts, but it's unstable,
+    // so we have to do it manually:
+
+    // first, make sure v's destructor doesn't free the data
+    // it thinks it owns when it goes out of scope
+    let mut v = std::mem::ManuallyDrop::new(v);
+
+    // then, pick apart the existing Vec
+    let p = v.as_mut_ptr();
+    let len = v.len();
+    let cap = v.capacity();
+
+    // finally, adopt the data into a new Vec
+    unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
+}
+
+impl<'a> ConvertJValueToRust<Vec<i8>> for JValue<'a> {
+    fn into_rust(self, je: &JNIEnv) -> Result<Vec<i8>, jni::errors::Error> {
+        let tmp:Vec<u8> = self.into_rust(je)?;
+
+        Ok(vec_u8_into_i8(tmp))
+    }
+}
+
+impl<'a> ConvertJValueToRust<Vec<u8>> for JValue<'a> {
+    fn into_rust(self, je: &JNIEnv) -> Result<Vec<u8>, jni::errors::Error> {
+        let object:JObject = self.l()?;
+        let rval = je.convert_byte_array(*object);
+        je.exception_check()?;
+        //println!("delete_local_ref()");
+        je.delete_local_ref(object);
+        rval
     }
 }
 

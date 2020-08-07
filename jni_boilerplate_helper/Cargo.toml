@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 jni = "0.17.0"
+log = "*"
