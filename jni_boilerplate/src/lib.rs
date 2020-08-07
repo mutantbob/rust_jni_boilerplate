@@ -309,11 +309,16 @@ impl AllAboutArg
         let tmp_name =format!("tmp{}", index);
         AllAboutArg {
             a_type: arg_type,
-            p_ident: Ident::new(&p_name, Span::call_site().into()),
+            p_ident: simple_identifier(&p_name),
             p_name,
-            tmp_ident: Ident::new(&tmp_name, Span::call_site().into()),
+            tmp_ident: simple_identifier(&tmp_name),
         }
     }
+
+}
+
+fn simple_identifier(name: &str) -> Ident {
+    Ident::new(&name, Span::call_site().into())
 }
 
 #[proc_macro]
@@ -348,7 +353,10 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     arg_sig = syn::punctuated::Punctuated::new();
 
     for arg in &args_metadata {
-        let arg2 = named_function_argument(&arg.p_name, &arg.a_type);
+        let arg2 = match named_function_argument(&arg.p_name, &arg.a_type) {
+            Ok(val) => val,
+            Err(err) => return TokenStream::from(err.to_compile_error()),
+        };
         arg_sig.push(arg2)
     }
 
@@ -361,22 +369,6 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
             quote!{let #tmp_i = #p_i.into_temporary(jni_env)?;}
         } )
         .collect();
-    /*
-
-    let decl0 = {
-        let md0 = &args_metadata[0];
-        let tmp_0 = &md0.tmp_ident;
-        let p_0 = &md0.p_ident;
-        quote!{ let #tmp_0 = #p_0.into_temporary(jni_env)?; }
-    };
-    let rtso:Option<String> = match &macro_args.return_type {
-        ReturnType::Default => None,
-        ReturnType::Type(_, bt) => Some(type_to_string(&*bt))
-    };
-    */
-
-    //let sig = jni_method_signature_string(&arg_type_strings, &rtso);
-    //let sig:syn::LitStr = syn::LitStr::new(&sig, Span::call_site().into());
 
     let jvalue_param_array:Vec<proc_macro2::TokenStream> = args_metadata.iter()
         .map(|metadata| {
@@ -407,52 +399,16 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         results.into_rust(jni_env)
     }
     };
-    //let pants = "#(arg#arg_indices.into_temporary(jni_env);),*";
-    //let tuple = (#(arg#arg_indices.into_temporary(jni_env);),*);
-    //#(let tmp#arg_indices = arg#arg_indices.into_temporary(jni_env);)*
+
     body.into()
 }
 
-/*
-this is way more trouble than it is worth
-fn wrap_result_type(macro_args: &StaticMethodArgs) {
-    &macro_args.return_type;
-
-    let mut result_type_args = Punctuated::new();
-    result_type_args.push(GenericArgument::Type(match macro_args.return_type
-    {}));
-
-    let mut segments = Punctuated::new();
-
-    segments.push(PathSegment {
-        ident: Ident::new("Result", Span::call_site().into()),
-        arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-            colon2_token: None,
-            lt_token: syn::token::Lt(Span::call_site().into()),
-            args: result_type_args,
-            gt_token: Token![>](Span::call_site().into())
-        })
-    });
-    let tp: TypePath = TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: None,
-            segments: segments,
-        }
-    };
-    let rt: Type = Type::Path(tp);
-    let return_type = ReturnType::Type(if let ReturnType::Type(arrow, _) = macro_args.return_type {
-        arrow
-    } else { Token![->](Span::call_site().into()) }, Box::new(rt));
-}
-*/
-
-fn named_function_argument(name: &str, arg_type: &Type) -> FnArg {
+fn named_function_argument2(name: &str, arg_type: &Type) -> FnArg {
     let arg_ident: PatIdent = PatIdent {
         attrs: vec![],
         by_ref: None,
         mutability: None,
-        ident: Ident::new(name, Span::call_site().into()),
+        ident: simple_identifier(name),
         subpat: None
     };
     let pat_type: PatType = PatType {
@@ -465,4 +421,11 @@ fn named_function_argument(name: &str, arg_type: &Type) -> FnArg {
     };
     let arg2: syn::FnArg = FnArg::Typed(pat_type);
     arg2
+}
+
+fn named_function_argument(name: &str, arg_type: &Type) -> Result<FnArg, syn::Error> {
+    let id = simple_identifier(name);
+    let tokens:proc_macro::TokenStream = quote! { #id:#arg_type }.into();
+    //let x = parse_macro_input!(tokens as FnArg);
+    ::syn::parse_macro_input::parse::<FnArg>(tokens)
 }
