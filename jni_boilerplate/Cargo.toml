@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-syn = { version= "*", features = ["full"] }
+syn = { version= "1.0.36", features = ["full"] }
 quote = "*"
-proc-macro2 = "*"
+proc-macro2 = "1.0.19"
 jni_boilerplate_helper = { path="../jni_boilerplate_helper" }
 
 [lib]
