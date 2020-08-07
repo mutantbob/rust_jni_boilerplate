@@ -6,16 +6,15 @@ extern crate proc_macro2;
 #[macro_use]
 extern crate quote;
 
-use proc_macro::{TokenStream, Span, Literal};
+use proc_macro::{TokenStream, Span};
 use proc_macro2::Ident;
 use std::any::Any;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{ReturnType, Type, TypeBareFn, TypeTuple, FnArg, PatType, Pat, PatIdent, TypePath, Path, PathSegment, PathArguments, AngleBracketedGenericArguments, GenericArgument, LitInt};
+use syn::{ReturnType, Type, TypeBareFn, FnArg, PatType, Pat, PatIdent};
 use syn::token::Comma;
 
 
-use jni_boilerplate_helper::{jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation, jni_boilerplate_unwrapped_instance_method_invocation, jni_method_signature_string};
-use syn::punctuated::Punctuated;
+use jni_boilerplate_helper::{jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation, jni_boilerplate_unwrapped_instance_method_invocation};
 
 //
 
@@ -297,11 +296,9 @@ impl<'a> Parse for StaticMethodArgs
 struct AllAboutArg
 {
     a_type: Type,
-    type_string: String,
     p_ident: Ident,
     p_name: String,
     tmp_ident: Ident,
-    tmp_name: String,
 }
 
 impl AllAboutArg
@@ -310,13 +307,11 @@ impl AllAboutArg
     {
         let p_name = format!("arg{}", index);
         let tmp_name =format!("tmp{}", index);
-        return AllAboutArg {
-            type_string: type_to_string(&arg_type),
+        AllAboutArg {
             a_type: arg_type,
             p_ident: Ident::new(&p_name, Span::call_site().into()),
             p_name,
             tmp_ident: Ident::new(&tmp_name, Span::call_site().into()),
-            tmp_name,
         }
     }
 }
@@ -352,15 +347,10 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let mut arg_sig: syn::punctuated::Punctuated<FnArg, Comma>;
     arg_sig = syn::punctuated::Punctuated::new();
 
-    for (arg) in &args_metadata {
+    for arg in &args_metadata {
         let arg2 = named_function_argument(&arg.p_name, &arg.a_type);
         arg_sig.push(arg2)
     }
-
-
-    let arg_type_strings:Vec<String> = args_metadata.iter()
-        .map(|at| at.type_string.clone())
-        .collect();
 
     println!("what now 2?");
 

@@ -1,10 +1,9 @@
-#[macro_use]
 extern crate jni;
 
 use log::debug;
 
 use jni::objects::{JObject, JValue, AutoLocal, JString, JClass};
-use jni::sys::{jobject, jbyteArray, jintArray, jshortArray, jsize};
+use jni::sys::{jbyteArray, jintArray, jshortArray, jsize};
 use jni::{JNIEnv, AttachGuard};
 use std::fmt::Write;
 
@@ -219,7 +218,9 @@ impl<'a> ConvertJValueToRust<Vec<u8>> for JValue<'a> {
         let rval = je.convert_byte_array(*object);
         je.exception_check()?;
         //println!("delete_local_ref()");
-        je.delete_local_ref(object);
+        if let Err(e) =je.delete_local_ref(object) {
+            debug!("jni failed to delete_local_ref() : {:?}", e)
+        }
         rval
     }
 }
@@ -438,7 +439,7 @@ pub fn jni_boilerplate_instance_method_invocation(
 fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> String {
     let mut tmp = String::new();
     for (i, _arg_type) in argument_types.iter().enumerate() {
-        write!(tmp, "let tmp{} = arg{}.into_temporary({})?;\n", i, i, jni_env_variable_name).unwrap();
+        writeln!(tmp, "let tmp{} = arg{}.into_temporary({})?;", i, i, jni_env_variable_name).unwrap();
     }
     tmp
 }
