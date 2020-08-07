@@ -371,21 +371,29 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
             quote!{let #tmp_i = #p_i.into_temporary(jni_env);}
         } )
         .collect();
+    /*
 
     let decl0 = {
         let md0 = &args_metadata[0];
         let tmp_0 = &md0.tmp_ident;
         let p_0 = &md0.p_ident;
-        quote!{ let #tmp_0 = #p_0.into_temporary(jni_env); }
+        quote!{ let #tmp_0 = #p_0.into_temporary(jni_env)?; }
     };
-    let decl0 = &decl[0];
     let rtso:Option<String> = match &macro_args.return_type {
         ReturnType::Default => None,
         ReturnType::Type(_, bt) => Some(type_to_string(&*bt))
     };
+    */
 
     //let sig = jni_method_signature_string(&arg_type_strings, &rtso);
     //let sig:syn::LitStr = syn::LitStr::new(&sig, Span::call_site().into());
+
+    let jvalue_param_array:Vec<proc_macro2::TokenStream> = args_metadata.iter()
+        .map(|metadata| {
+            let ty = &metadata.a_type;
+            let tmp_i = &metadata.tmp_ident;
+            quote! { <#ty>::temporary_into_jvalue(&#tmp_i) }
+        }).collect();
 
     let body = quote!{
     pub fn #rust_name(jni_env: &jni::JNIEnv, #arg_sig) ->Result<#return_type, jni::errors::Error>
@@ -403,7 +411,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         #(#decl)*
         let sig = String::from("(")+#(&<#arg_types>::signature_for())+* + ")"+&<#return_type>::signature_for();
 
-        let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[<i32>::temporary_into_jvalue(&tmp0)])?;
+        let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
 
         results.into_rust(jni_env)
