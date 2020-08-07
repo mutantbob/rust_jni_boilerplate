@@ -4,7 +4,7 @@ extern crate jni;
 use log::debug;
 
 use jni::objects::{JObject, JValue, AutoLocal, JString, JClass};
-use jni::sys::{jobject, jbyteArray};
+use jni::sys::{jobject, jbyteArray, jintArray, jshortArray, jsize};
 use jni::{JNIEnv, AttachGuard};
 use std::fmt::Write;
 
@@ -226,16 +226,16 @@ impl<'a> ConvertJValueToRust<Vec<u8>> for JValue<'a> {
 
 //
 
-pub trait ConvertRustToJValue<'a, T> {
-    fn into_temporary(self, je:&JNIEnv<'a>) ->T;
+pub trait ConvertRustToJValue<'a, 'b, T> {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<T, jni::errors::Error>;
     fn temporary_into_jvalue(tmp: &T) -> JValue<'a>;
 }
 
 macro_rules! impl_convert_rust_to_jvalue {
     ( $($t:ty),* ) => {
-    $( impl<'a> ConvertRustToJValue<'a, $t> for $t
+    $( impl<'a,'b> ConvertRustToJValue<'a, 'b, $t> for $t
     {
-        fn into_temporary(self, _je:&JNIEnv<'a>) ->$t { self }
+        fn into_temporary(self, _je:&'b JNIEnv<'a>) ->Result<$t, jni::errors::Error> { Ok(self) }
         fn temporary_into_jvalue(tmp: &$t) -> JValue<'a>
         {
         (*tmp).into()
@@ -246,46 +246,70 @@ macro_rules! impl_convert_rust_to_jvalue {
 
 impl_convert_rust_to_jvalue! { i8, i16, i32, i64, f32, f64 }
 
-impl<'a> ConvertRustToJValue<'a, char> for char {
-    fn into_temporary(self, _je:&JNIEnv<'a>) ->char {self}
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, char> for char {
+    fn into_temporary(self, _je:&'b JNIEnv<'a>) ->Result<char, jni::errors::Error> {Ok(self)}
     fn temporary_into_jvalue(tmp:&char) -> JValue<'a> {
         JValue::Char((*tmp) as u16)
     }
 }
 
-impl<'a> ConvertRustToJValue<'a, bool> for bool {
-    fn into_temporary(self, _je:&JNIEnv<'a>) ->bool {self}
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, bool> for bool {
+    fn into_temporary(self, _je:&'b JNIEnv<'a>) ->Result<bool, jni::errors::Error> {Ok(self)}
     fn temporary_into_jvalue(tmp:&bool) -> JValue<'a> {
         JValue::Bool((*tmp) as u8)
     }
 }
 
-impl<'a> ConvertRustToJValue<'a, jbyteArray> for &[i8] {
-    fn into_temporary(self, je:&JNIEnv<'a>) ->jbyteArray {
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, jbyteArray> for &[i8] {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<jbyteArray, jni::errors::Error> {
         let shenanigans = unsafe { &*(self as *const [i8] as *const [u8]) };
-        je.byte_array_from_slice(shenanigans).unwrap()
+        Ok(je.byte_array_from_slice(shenanigans).unwrap())
     }
     fn temporary_into_jvalue(tmp: &jbyteArray) -> JValue<'a> {
         JObject::from(*tmp).into()
     }
 }
 
-impl<'a> ConvertRustToJValue<'a, jbyteArray> for &[u8] {
-    fn into_temporary(self, je:&JNIEnv<'a>) ->jbyteArray {
-        je.byte_array_from_slice(self).unwrap()
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, jbyteArray> for &[u8] {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<jbyteArray, jni::errors::Error> {
+        je.byte_array_from_slice(self)
     }
     fn temporary_into_jvalue(tmp: &jbyteArray) -> JValue<'a> {
         JObject::from(*tmp).into()
     }
 }
 
-impl<'a> ConvertRustToJValue<'a, JString<'a>> for &str {
-    fn into_temporary(self, je:&JNIEnv<'a>) ->JString<'a> {
-        je.new_string(self).unwrap()
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, JString<'a>> for &str {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<JString<'a>, jni::errors::Error> {
+        je.new_string(self)
     }
     fn temporary_into_jvalue(tmp: &JString<'a>) -> JValue<'a> {
         let jo: JObject = JObject::from(*tmp);
         jo.into()
+    }
+}
+
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a,'b>> for &[i32] {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<AutoLocal<'a,'b>,jni::errors::Error> {
+        let rval:jintArray = je.new_int_array(self.len() as jsize)?;
+        je.set_int_array_region(rval, 0, self)?;
+
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+    fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a,'b>> for &[i16] {
+    fn into_temporary(self, je:&'b JNIEnv<'a>) ->Result<AutoLocal<'a,'b>,jni::errors::Error> {
+        let rval:jshortArray = je.new_short_array(self.len() as jsize)?;
+        je.set_short_array_region(rval, 0, self)?;
+
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+    fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
     }
 }
 
@@ -414,7 +438,7 @@ pub fn jni_boilerplate_instance_method_invocation(
 fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> String {
     let mut tmp = String::new();
     for (i, _arg_type) in argument_types.iter().enumerate() {
-        write!(tmp, "let tmp{} = arg{}.into_temporary({});\n", i, i, jni_env_variable_name).unwrap();
+        write!(tmp, "let tmp{} = arg{}.into_temporary({})?;\n", i, i, jni_env_variable_name).unwrap();
     }
     tmp
 }

@@ -368,7 +368,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         .map( |metadata| {
             let tmp_i = &metadata.tmp_ident;
             let p_i = &metadata.p_ident;
-            quote!{let #tmp_i = #p_i.into_temporary(jni_env);}
+            quote!{let #tmp_i = #p_i.into_temporary(jni_env)?;}
         } )
         .collect();
     /*
