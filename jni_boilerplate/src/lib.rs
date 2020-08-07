@@ -11,7 +11,7 @@ use proc_macro2::Ident;
 use std::any::Any;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
-use syn::{FnArg, Pat, PatIdent, PatType, ReturnType, Type, TypeBareFn};
+use syn::{FnArg, Pat, PatIdent, PatType, ReturnType, Type};
 
 use jni_boilerplate_helper::{
     jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation,
@@ -20,28 +20,52 @@ use jni_boilerplate_helper::{
 
 //
 
-struct Arguments {
-    rust_name: Ident,
-    java_name: Ident,
-    signature: TypeBareFn,
+struct MySignature {
+    pub parameter_types: Vec<Type>,
 }
 
-impl Parse for Arguments {
-    fn parse(tokens: ParseStream) -> Result<Arguments, syn::Error> {
-        let rust_name: Ident = tokens.parse()?;
-        let java_name: Ident = if tokens.peek(Token![=]) {
-            let _eq: Token![=] = tokens.parse()?;
-            tokens.parse()?
-        } else {
-            rust_name.clone()
-        };
-        let _comma: Token![,] = tokens.parse()?;
-        let signature: TypeBareFn = tokens.parse()?;
+impl Parse for MySignature {
+    fn parse(tokens: ParseStream) -> Result<Self, syn::Error> {
+        let mut parameter_types: Vec<Type> = Vec::new();
 
-        Ok(Arguments {
+        let arg_types: ParseBuffer;
+        parenthesized!(arg_types in tokens);
+
+        while !arg_types.is_empty() {
+            let arg_type: Type = arg_types.parse()?;
+            parameter_types.push(arg_type);
+
+            if !arg_types.is_empty() {
+                let _comma: Token![,] = arg_types.parse()?;
+            }
+        }
+
+        Ok(MySignature { parameter_types })
+    }
+}
+
+//
+
+struct InstanceMacroArguments {
+    rust_name: Ident,
+    java_name: String,
+    signature: MySignature,
+    return_type: ReturnType,
+}
+
+impl Parse for InstanceMacroArguments {
+    fn parse(tokens: ParseStream) -> Result<InstanceMacroArguments, syn::Error> {
+        let (rust_name, java_name) = parse_function_names(tokens)?;
+
+        let signature: MySignature = tokens.parse()?;
+
+        let return_type: ReturnType = tokens.parse()?;
+
+        Ok(InstanceMacroArguments {
             rust_name,
             java_name,
             signature,
+            return_type,
         })
     }
 }
@@ -50,23 +74,23 @@ impl Parse for Arguments {
 
 ///
 /// example:
-/// <pre>jni_instance_method!{ fn_name[=java_name], fn([ arg_type1 [,arg_type2...]])[ ->return_type ] }
+/// <pre>jni_instance_method!{ fn_name[=java_name]([ arg_type1 [,arg_type2...]])[ ->return_type ] }
 /// </pre>
 #[proc_macro]
 pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
-    let macro_args = syn::parse_macro_input!(t_stream as Arguments);
+    let macro_args = syn::parse_macro_input!(t_stream as InstanceMacroArguments);
 
     let rust_name = macro_args.rust_name.to_string();
     let java_name = macro_args.java_name.to_string();
 
     let argument_types: Vec<String> = macro_args
         .signature
-        .inputs
+        .parameter_types
         .iter()
-        .map(|arg_type| type_to_string(&arg_type.ty))
+        .map(|arg_type| type_to_string(&arg_type))
         .collect();
 
-    let return_type_str: Option<String> = match &macro_args.signature.output {
+    let return_type_str: Option<String> = match &macro_args.return_type {
         ReturnType::Default => None,
         ReturnType::Type(_, ty) => Some(type_to_string(&ty)),
     };
@@ -83,19 +107,19 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
-    let macro_args = syn::parse_macro_input!(t_stream as Arguments);
+    let macro_args = syn::parse_macro_input!(t_stream as InstanceMacroArguments);
 
     let rust_name = macro_args.rust_name.to_string();
     let java_name = macro_args.java_name.to_string();
 
     let argument_types: Vec<String> = macro_args
         .signature
-        .inputs
+        .parameter_types
         .iter()
-        .map(|arg_type| type_to_string(&arg_type.ty))
+        .map(|arg_type| type_to_string(&arg_type))
         .collect();
 
-    let return_type_str: Option<String> = match &macro_args.signature.output {
+    let return_type_str: Option<String> = match &macro_args.return_type {
         ReturnType::Default => None,
         ReturnType::Type(_, ty) => Some(type_to_string(&ty)),
     };
@@ -142,7 +166,7 @@ fn path_segments_to_string(path1: &syn::Path) -> String {
 struct ConstructorMacroArgs {
     pub class_name: String,
     pub constructor_name: String,
-    pub argument_types: Vec<Type>,
+    pub signature: MySignature,
 }
 
 impl Parse for ConstructorMacroArgs {
@@ -171,24 +195,12 @@ impl Parse for ConstructorMacroArgs {
             class_name.push_str(&ident.to_string());
         }
 
-        let mut argument_types: Vec<Type> = Vec::new();
-
-        let arg_types: ParseBuffer;
-        parenthesized!(arg_types in tokens);
-
-        while !arg_types.is_empty() {
-            let arg_type: Type = arg_types.parse()?;
-            argument_types.push(arg_type);
-
-            if !arg_types.is_empty() {
-                let _comma: Token![,] = arg_types.parse()?;
-            }
-        }
+        let signature = tokens.parse()?;
 
         Ok(ConstructorMacroArgs {
             class_name,
             constructor_name,
-            argument_types,
+            signature,
         })
     }
 }
@@ -221,7 +233,8 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 
     let constructor_name: &str = &macro_args.constructor_name;
     let argument_types: Vec<String> = macro_args
-        .argument_types
+        .signature
+        .parameter_types
         .iter()
         .map(|ty| type_to_string(ty))
         .collect();
@@ -243,43 +256,20 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 struct StaticMethodArgs {
     rust_name: Ident,
     java_name: String,
-    argument_types: Vec<Type>,
+    signature: MySignature,
     return_type: ReturnType,
 }
 
 impl<'a> Parse for StaticMethodArgs {
     fn parse(tokens: &ParseBuffer) -> Result<Self, syn::Error> {
-        let function_name: Ident = tokens.parse()?;
+        let (rust_name, java_name) = parse_function_names(tokens)?;
 
-        let (rust_name, java_name) = if tokens.peek(Token![=]) {
-            let _eq: Token![=] = tokens.parse()?;
+        let signature = tokens.parse()?;
 
-            let ident: Ident = tokens.parse()?;
-            (function_name, ident.to_string())
-        } else {
-            (function_name.clone(), function_name.to_string())
-        };
-
-        let mut argument_types: Vec<Type> = Vec::new();
-        let arg_types: ParseBuffer;
-        parenthesized!(arg_types in tokens);
-
-        while !arg_types.is_empty() {
-            let arg_type: Type = arg_types.parse()?;
-            argument_types.push(arg_type);
-            if !arg_types.is_empty() {
-                let _comma: Token![,] = arg_types.parse()?;
-            }
-        }
-
-        println!("do I get a return type?");
+        //println!("do I get a return type?");
 
         let return_type: ReturnType = if tokens.peek(Token![->]) {
-            println!("parse return type");
-            //let _arrow: Token![->] = tokens.parse()?;
-            let rval = tokens.parse()?;
-            println!("win");
-            rval
+            tokens.parse()?
         } else {
             ReturnType::Default
         };
@@ -287,7 +277,7 @@ impl<'a> Parse for StaticMethodArgs {
         Ok(StaticMethodArgs {
             rust_name,
             java_name,
-            argument_types,
+            signature,
             return_type,
         })
     }
@@ -338,7 +328,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
 
     println!("what now?");
 
-    let arg_types = &macro_args.argument_types;
+    let arg_types = &macro_args.signature.parameter_types;
 
     let args_metadata: Vec<AllAboutArg> = arg_types
         .iter()
@@ -428,4 +418,18 @@ fn named_function_argument(name: &str, arg_type: &Type) -> Result<FnArg, syn::Er
     let tokens: proc_macro::TokenStream = quote! { #id:#arg_type }.into();
     //let x = parse_macro_input!(tokens as FnArg);
     ::syn::parse_macro_input::parse::<FnArg>(tokens)
+}
+
+fn parse_function_names(tokens: &ParseBuffer) -> Result<(Ident, String), syn::Error> {
+    let function_name: Ident = tokens.parse()?;
+
+    let (rust_name, java_name) = if tokens.peek(Token![=]) {
+        let _eq: Token![=] = tokens.parse()?;
+
+        let ident: Ident = tokens.parse()?;
+        (function_name, ident.to_string())
+    } else {
+        (function_name.clone(), function_name.to_string())
+    };
+    Ok((rust_name, java_name))
 }
