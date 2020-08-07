@@ -137,7 +137,13 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
 fn type_to_string(ty: &Type) -> String {
     match ty {
         Type::Path(type_path) => path_segments_to_string(&type_path.path),
-        Type::Reference(reference) => String::from("&") + &type_to_string(&reference.elem),
+        Type::Reference(reference) => {
+            String::from("&")
+                + (if reference.mutability.is_some() {
+                "mut "
+            } else { "" } )
+                + &type_to_string(&reference.elem)
+        },
         Type::Slice(array) => {
             //println!("{:?}", ty.type_id());
             String::from("[") + &type_to_string(&array.elem) + "]"
