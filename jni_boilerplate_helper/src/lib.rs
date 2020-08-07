@@ -2,10 +2,13 @@ extern crate jni;
 
 use log::debug;
 
+use crate::array_copy_back::ArrayCopyBackInt;
 use jni::objects::{AutoLocal, JClass, JObject, JString, JValue};
 use jni::sys::{jbyteArray, jintArray, jshortArray, jsize};
 use jni::{AttachGuard, JNIEnv};
 use std::fmt::Write;
+
+mod array_copy_back;
 
 pub struct JClassWrapper<'a, 'b> {
     pub jni_env: &'a JNIEnv<'a>,
@@ -37,6 +40,12 @@ macro_rules! jni_signature_single {
 
 pub trait JavaSignatureFor {
     fn signature_for() -> String;
+}
+
+impl JavaSignatureFor for () {
+    fn signature_for() -> String {
+        String::from("V")
+    }
 }
 
 impl JavaSignatureFor for bool {
@@ -105,6 +114,12 @@ impl<T: JavaSignatureFor> JavaSignatureFor for &[T] {
     }
 }
 
+impl<T: JavaSignatureFor> JavaSignatureFor for &mut [T] {
+    fn signature_for() -> String {
+        String::from("[") + &T::signature_for()
+    }
+}
+
 impl<T: JavaSignatureFor> JavaSignatureFor for Vec<T> {
     fn signature_for() -> String {
         String::from("[") + &T::signature_for()
@@ -132,6 +147,12 @@ impl JavaClassNameFor for String {
 
 pub trait ConvertJValueToRust<T> {
     fn into_rust(self, je: &JNIEnv) -> Result<T, jni::errors::Error>;
+}
+
+impl<'a> ConvertJValueToRust<()> for JValue<'a> {
+    fn into_rust(self, _je: &JNIEnv) -> Result<(), jni::errors::Error> {
+        self.v()
+    }
 }
 
 impl<'a> ConvertJValueToRust<char> for JValue<'a> {
@@ -298,6 +319,18 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i32] {
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
+    }
+}
+
+impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackInt<'a, 'b, 'c>> for &'c mut [i32] {
+    fn into_temporary(
+        self,
+        je: &'b JNIEnv<'a>,
+    ) -> Result<ArrayCopyBackInt<'a, 'b, 'c>, jni::errors::Error> {
+        ArrayCopyBackInt::new(self, je)
+    }
+    fn temporary_into_jvalue(tmp: &ArrayCopyBackInt<'a, 'b, 'c>) -> JValue<'a> {
+        tmp.as_jvalue()
     }
 }
 
