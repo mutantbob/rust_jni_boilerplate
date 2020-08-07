@@ -2,7 +2,7 @@ extern crate jni;
 
 use log::debug;
 
-use crate::array_copy_back::ArrayCopyBackInt;
+use crate::array_copy_back::{ArrayCopyBackInt, ArrayCopyBackShort, ArrayCopyBackByte};
 use jni::objects::{AutoLocal, JClass, JObject, JString, JValue};
 use jni::sys::{jbyteArray, jintArray, jshortArray, jsize};
 use jni::{AttachGuard, JNIEnv};
@@ -343,6 +343,30 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i16] {
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
+    }
+}
+
+impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackShort<'a, 'b, 'c>> for &'c mut [i16] {
+    fn into_temporary(
+        self,
+        je: &'b JNIEnv<'a>,
+    ) -> Result<ArrayCopyBackShort<'a, 'b, 'c>, jni::errors::Error> {
+        ArrayCopyBackShort::new(self, je)
+    }
+    fn temporary_into_jvalue(tmp: &ArrayCopyBackShort<'a, 'b, 'c>) -> JValue<'a> {
+        tmp.as_jvalue()
+    }
+}
+
+impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackByte<'a, 'b, 'c>> for &'c mut [i8] {
+    fn into_temporary(
+        self,
+        je: &'b JNIEnv<'a>,
+    ) -> Result<ArrayCopyBackByte<'a, 'b, 'c>, jni::errors::Error> {
+        ArrayCopyBackByte::new(self, je)
+    }
+    fn temporary_into_jvalue(tmp: &ArrayCopyBackByte<'a, 'b, 'c>) -> JValue<'a> {
+        tmp.as_jvalue()
     }
 }
 
