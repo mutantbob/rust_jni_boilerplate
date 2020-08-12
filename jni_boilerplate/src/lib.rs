@@ -356,7 +356,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
 
-        to_rust(jni_env, &results)
+        <#return_type>::to_rust(jni_env, &results)
     }
     };
 
