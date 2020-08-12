@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 jni = "0.17.0"
 log = "*"
+syn = { version= "1.0.36", features = ["full"] }

@@ -1,4 +1,5 @@
 extern crate jni;
+extern crate syn;
 
 use log::debug;
 
@@ -7,6 +8,8 @@ use jni::objects::{AutoLocal, JClass, JObject, JString, JValue};
 use jni::sys::{jbyteArray, jintArray, jshortArray, jsize};
 use jni::{AttachGuard, JNIEnv};
 use std::fmt::Write;
+use syn::{ReturnType, Type, PathArguments, GenericArgument, TypeTuple};
+use std::any::Any;
 
 mod array_copy_back;
 
@@ -145,19 +148,21 @@ impl JavaClassNameFor for String {
 
 //
 
-pub trait ConvertJValueToRust<T> {
-    fn into_rust(self, je: &JNIEnv) -> Result<T, jni::errors::Error>;
+pub trait ConvertJValueToRust
+where Self: std::marker::Sized
+{
+    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error>;
 }
 
-impl<'a> ConvertJValueToRust<()> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<(), jni::errors::Error> {
-        self.v()
+impl ConvertJValueToRust for () {
+    fn to_rust<'a>(_je: &JNIEnv, val: &JValue<'a>) -> Result<Self, jni::errors::Error> {
+        val.v()
     }
 }
 
-impl<'a> ConvertJValueToRust<char> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<char, jni::errors::Error> {
-        self.c().and_then(|c| match std::char::from_u32(c as u32) {
+impl<'a> ConvertJValueToRust for char {
+    fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        val.c().and_then(|c| match std::char::from_u32(c as u32) {
             None => Err(jni::errors::Error::from_kind(
                 jni::errors::ErrorKind::JavaException,
             )),
@@ -166,33 +171,33 @@ impl<'a> ConvertJValueToRust<char> for JValue<'a> {
     }
 }
 
-impl<'a> ConvertJValueToRust<i8> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<i8, jni::errors::Error> {
-        self.b()
+impl ConvertJValueToRust for i8 {
+    fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error>{
+        val.b()
     }
 }
 
-impl<'a> ConvertJValueToRust<i16> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<i16, jni::errors::Error> {
-        self.s()
+impl ConvertJValueToRust for i16 {
+    fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        val.s()
     }
 }
 
-impl<'a> ConvertJValueToRust<i32> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<i32, jni::errors::Error> {
-        self.i()
+impl ConvertJValueToRust for i32 {
+    fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        val.i()
     }
 }
 
-impl<'a> ConvertJValueToRust<i64> for JValue<'a> {
-    fn into_rust(self, _je: &JNIEnv) -> Result<i64, jni::errors::Error> {
-        self.j()
+impl ConvertJValueToRust for i64 {
+    fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        val.j()
     }
 }
 
-impl<'a> ConvertJValueToRust<String> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<String, jni::errors::Error> {
-        let obj = self.l()?;
+impl ConvertJValueToRust for String {
+    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        let obj = val.l()?;
         let x = je.get_string(obj.into())?;
         let result = x.to_str();
         match result {
@@ -220,17 +225,20 @@ fn vec_u8_into_i8(v: Vec<u8>) -> Vec<i8> {
     unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
 }
 
-impl<'a> ConvertJValueToRust<Vec<i8>> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<Vec<i8>, jni::errors::Error> {
-        let tmp: Vec<u8> = self.into_rust(je)?;
+impl ConvertJValueToRust for Vec<i8> {
+    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        let tmp: Vec<u8> =
+            //Vec::u8::to_rust
+            Vec::<u8>::to_rust
+            (je, val)?;
 
         Ok(vec_u8_into_i8(tmp))
     }
 }
 
-impl<'a> ConvertJValueToRust<Vec<u8>> for JValue<'a> {
-    fn into_rust(self, je: &JNIEnv) -> Result<Vec<u8>, jni::errors::Error> {
-        let object: JObject = self.l()?;
+impl ConvertJValueToRust for Vec<u8> {
+    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
+        let object: JObject = val.l()?;
         let rval = je.convert_byte_array(*object);
         je.exception_check()?;
         //println!("delete_local_ref()");
@@ -248,6 +256,7 @@ pub trait ConvertRustToJValue<'a, 'b, T> {
     fn temporary_into_jvalue(tmp: &T) -> JValue<'a>;
 }
 
+#[macro_export]
 macro_rules! impl_convert_rust_to_jvalue {
     ( $($t:ty),* ) => {
     $( impl<'a,'b> ConvertRustToJValue<'a, 'b, $t> for $t
@@ -309,6 +318,30 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, JString<'a>> for &str {
         jo.into()
     }
 }
+
+impl<'a, 'b> ConvertRustToJValue<'a, 'b, JString<'a>> for String {
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<JString<'a>, jni::errors::Error> {
+        je.new_string(&self)
+    }
+    fn temporary_into_jvalue(tmp: &JString<'a>) -> JValue<'a> {
+        let jo: JObject = JObject::from(*tmp);
+        jo.into()
+    }
+}
+
+/*
+impl<'a, 'b, T> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[T]
+{
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, Error> {
+        let cls =
+        je.new_object_array(self.len() , )
+    }
+
+    fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+        unimplemented!()
+    }
+}
+*/
 
 impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i32] {
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
@@ -430,11 +463,94 @@ pub fn jni_argument_array(argument_types: &[String], _jni_env_variable_name: &st
     body
 }
 
+pub fn return_type_to_string(ty: &ReturnType, freaky:bool ) -> String {
+    match ty {
+        ReturnType::Default => String::from("()"),
+        ReturnType::Type(_arrow, ty) => type_to_string(ty, freaky),
+    }
+}
+
+pub fn type_to_string(ty: &Type, freaky:bool) -> String {
+    match ty {
+        Type::Path(type_path) => {
+            path_segments_to_string(&type_path.path, freaky)
+        },
+        Type::Reference(reference) => {
+            String::from("&")
+                + (if reference.mutability.is_some() {
+                "mut "
+            } else { "" } )
+                + &type_to_string(&reference.elem, false)
+        },
+        Type::Slice(array) => {
+            //println!("{:?}", ty.type_id());
+            String::from("[") + &type_to_string(&array.elem, false) + "]"
+        }
+        Type::Tuple(tup) => { tuple_to_string(tup) }
+
+        _ => panic!("unhandled variant of Type {:?}", ty.type_id()),
+    }
+}
+
+pub fn path_segments_to_string(path1: &syn::Path, freaky:bool) -> String {
+    let prefix: String = match path1.leading_colon {
+        Some(_) => String::from("::"),
+        None => String::new(),
+    };
+
+    path1.segments.iter().fold(prefix, |mut acc, v| {
+        if !acc.is_empty() {
+            acc.push_str("::")
+        }
+        acc.push_str(&v.ident.to_string());
+        acc.push_str( &path_arguments_to_string(&v.arguments, freaky));
+
+        acc
+    })
+}
+
+pub fn path_arguments_to_string(args: &PathArguments, freaky:bool) -> String {
+    match args {
+        PathArguments::None => { String::from("") }
+        PathArguments::AngleBracketed(abga) => {
+            let mut acc=String::new();
+            for part in &abga.args {
+                match part {
+                    GenericArgument::Type(t) => acc.push_str(&type_to_string(t, false)),
+                    _ => { panic!("I don't support this") }
+                }
+            }
+
+            if freaky {
+                format!("::<{}>", acc)
+            } else {
+                format!("<{}>", acc)
+            }
+        }
+        PathArguments::Parenthesized(_) => { panic!("I don't support this") }
+    }
+}
+
+pub fn tuple_to_string(tuple: &TypeTuple) -> String
+{
+    let mut rval = String::from("(");
+    for elem in &tuple.elems {
+        if rval.len()>1 {
+            rval.push_str(",");
+        }
+        rval.push_str(&type_to_string(elem, false));
+    }
+    rval.push_str(")");
+
+    rval
+}
+
 pub fn jni_boilerplate_instance_method_invocation(
     rust_name: &str,
     java_name: &str,
     argument_types: &[String],
     return_type_str: &Option<String>,
+    return_type: &ReturnType,
 ) -> String {
     let mut body: String = String::from("pub fn ");
 
@@ -481,7 +597,7 @@ pub fn jni_boilerplate_instance_method_invocation(
     if returns_void {
         body.push_str("Ok(())\n");
     } else {
-        body.push_str("results.into_rust(&self.jni_env)\n");
+        writeln!(body, "{}::to_rust(&self.jni_env, &results)", return_type_to_string(return_type, true)).unwrap();
     }
 
     body.push_str("}\n");
@@ -556,7 +672,7 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     if returns_void {
         body.push_str("Ok(())\n");
     } else {
-        body.push_str("results.into_rust(je)\n");
+        body.push_str("to_rust(je, results)\n");
     }
 
     body.push_str("}\n");

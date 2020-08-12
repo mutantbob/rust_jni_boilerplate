@@ -8,15 +8,11 @@ extern crate quote;
 
 use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
-use std::any::Any;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
 use syn::{FnArg, Pat, PatIdent, PatType, ReturnType, Type};
 
-use jni_boilerplate_helper::{
-    jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation,
-    jni_boilerplate_unwrapped_instance_method_invocation,
-};
+use jni_boilerplate_helper::{jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation, jni_boilerplate_unwrapped_instance_method_invocation, type_to_string};
 
 //
 
@@ -87,12 +83,12 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
         .signature
         .parameter_types
         .iter()
-        .map(|arg_type| type_to_string(&arg_type))
+        .map(|arg_type| type_to_string(&arg_type, false))
         .collect();
 
     let return_type_str: Option<String> = match &macro_args.return_type {
         ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some(type_to_string(&ty)),
+        ReturnType::Type(_, ty) => Some(type_to_string(&ty, false)),
     };
 
     let body = jni_boilerplate_instance_method_invocation(
@@ -100,6 +96,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
         &java_name,
         &argument_types,
         &return_type_str,
+        &macro_args.return_type,
     );
 
     body.parse().unwrap()
@@ -116,12 +113,12 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
         .signature
         .parameter_types
         .iter()
-        .map(|arg_type| type_to_string(&arg_type))
+        .map(|arg_type| type_to_string(&arg_type, false))
         .collect();
 
     let return_type_str: Option<String> = match &macro_args.return_type {
         ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some(type_to_string(&ty)),
+        ReturnType::Type(_, ty) => Some(type_to_string(&ty, false)),
     };
 
     let body = jni_boilerplate_unwrapped_instance_method_invocation(
@@ -132,39 +129,6 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     );
 
     body.parse().unwrap()
-}
-
-fn type_to_string(ty: &Type) -> String {
-    match ty {
-        Type::Path(type_path) => path_segments_to_string(&type_path.path),
-        Type::Reference(reference) => {
-            String::from("&")
-                + (if reference.mutability.is_some() {
-                "mut "
-            } else { "" } )
-                + &type_to_string(&reference.elem)
-        },
-        Type::Slice(array) => {
-            //println!("{:?}", ty.type_id());
-            String::from("[") + &type_to_string(&array.elem) + "]"
-        }
-        _ => panic!("unhandled variant of Type {:?}", ty.type_id()),
-    }
-}
-
-fn path_segments_to_string(path1: &syn::Path) -> String {
-    let prefix: String = match path1.leading_colon {
-        Some(_) => String::from("::"),
-        None => String::new(),
-    };
-
-    path1.segments.iter().fold(prefix, |mut acc, v| {
-        if !acc.is_empty() {
-            acc.push_str("::")
-        }
-        acc.push_str(&v.ident.to_string());
-        acc
-    })
 }
 
 //
@@ -242,7 +206,7 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
         .signature
         .parameter_types
         .iter()
-        .map(|ty| type_to_string(ty))
+        .map(|ty| type_to_string(ty, false))
         .collect();
 
     let class_name: &str = &macro_args.class_name;
@@ -392,7 +356,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
 
-        results.into_rust(jni_env)
+        to_rust(jni_env, &results)
     }
     };
 
