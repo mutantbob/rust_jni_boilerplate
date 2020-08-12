@@ -1,5 +1,5 @@
 use jni::objects::{JObject, JValue};
-use jni::sys::{jintArray, jshortArray, jbyteArray, jsize};
+use jni::sys::{jbyteArray, jintArray, jshortArray, jsize};
 use jni::JNIEnv;
 
 pub struct ArrayCopyBackInt<'a, 'b, 'c> {
@@ -15,7 +15,7 @@ impl<'a, 'b, 'c> ArrayCopyBackInt<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackInt<'a, 'b, 'c>, jni::errors::Error> {
         let array = env.new_int_array(src.len() as jsize)?;
         env.set_int_array_region(array, 0, src)?;
-        Ok( ArrayCopyBackInt { array, src, env } )
+        Ok(ArrayCopyBackInt { array, src, env })
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
@@ -49,7 +49,7 @@ impl<'a, 'b, 'c> ArrayCopyBackShort<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackShort<'a, 'b, 'c>, jni::errors::Error> {
         let array = env.new_short_array(src.len() as jsize)?;
         env.set_short_array_region(array, 0, src)?;
-        Ok( ArrayCopyBackShort { array, src, env } )
+        Ok(ArrayCopyBackShort { array, src, env })
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
@@ -84,7 +84,7 @@ impl<'a, 'b, 'c> ArrayCopyBackByte<'a, 'b, 'c> {
         println!("ArrayCopyBackByte::new()");
         let array = env.new_byte_array(src.len() as jsize)?;
         env.set_byte_array_region(array, 0, src)?;
-        Ok( ArrayCopyBackByte { array, src, env } )
+        Ok(ArrayCopyBackByte { array, src, env })
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {

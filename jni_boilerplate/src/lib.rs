@@ -12,7 +12,10 @@ use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
 use syn::{FnArg, Pat, PatIdent, PatType, ReturnType, Type};
 
-use jni_boilerplate_helper::{jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation, jni_boilerplate_unwrapped_instance_method_invocation, type_to_string};
+use jni_boilerplate_helper::{
+    jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation,
+    jni_boilerplate_unwrapped_instance_method_invocation, type_to_string,
+};
 
 //
 
@@ -126,6 +129,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
         &java_name,
         &argument_types,
         &return_type_str,
+        &macro_args.return_type,
     );
 
     body.parse().unwrap()
