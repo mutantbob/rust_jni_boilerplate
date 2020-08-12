@@ -263,17 +263,48 @@ where
 
     let cls = je.get_object_class(src)?;
     if class_is_array(je, &cls)? {
-        let count = je.get_array_length(*src)?;
-        let mut rval: Vec<T> = Vec::new();
-        for i in 0..count {
-            let obj_i = je.get_object_array_element(*src, i)?;
-            let val: T = T::to_rust(je, &JValue::from(obj_i))?;
-            rval.push(val);
-        }
-        Ok(rval)
+        convert_jarray_to_rust(je, src)
     } else {
-        unimplemented!()
+        convert_iterable_to_rust_vec(je, src)
     }
+}
+
+pub fn convert_jarray_to_rust<T>(je: &JNIEnv, array: JObject) -> Result<Vec<T>, jni::errors::Error>
+where
+    T: ConvertJValueToRust,
+{
+    let count = je.get_array_length(*array)?;
+    let mut rval: Vec<T> = Vec::new();
+    for i in 0..count {
+        let obj_i = je.get_object_array_element(*array, i)?;
+        let val: T = T::to_rust(je, &JValue::from(obj_i))?;
+        rval.push(val);
+    }
+    Ok(rval)
+}
+
+pub fn convert_iterable_to_rust_vec<T>(
+    je: &JNIEnv,
+    iterable: JObject,
+) -> Result<Vec<T>, jni::errors::Error>
+where
+    T: ConvertJValueToRust,
+{
+    let iter = je.call_method(iterable, "iterator", "()Ljava/util/Iterator;", &[])?;
+    let iter = iter.l()?;
+
+    let mut rval: Vec<T> = Vec::new();
+    loop {
+        let has_next = je.call_method(iter, "hasNext", "()Z", &[])?;
+        if !has_next.z()? {
+            break;
+        }
+        let val = je.call_method(iter, "next", "()Ljava/lang/Object;", &[])?;
+        let val: T = T::to_rust(je, &val)?;
+        rval.push(val);
+    }
+
+    Ok(rval)
 }
 
 /*
