@@ -300,8 +300,6 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         }
     };
 
-    println!("what now?");
-
     let arg_types = &macro_args.signature.parameter_types;
 
     let args_metadata: Vec<AllAboutArg> = arg_types
@@ -320,8 +318,6 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         };
         arg_sig.push(arg2)
     }
-
-    println!("what now 2?");
 
     let decl: Vec<proc_macro2::TokenStream> = args_metadata
         .iter()

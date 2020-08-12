@@ -81,7 +81,7 @@ impl<'a, 'b, 'c> ArrayCopyBackByte<'a, 'b, 'c> {
         src: &'c mut [i8],
         env: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackByte<'a, 'b, 'c>, jni::errors::Error> {
-        println!("ArrayCopyBackByte::new()");
+        //println!("ArrayCopyBackByte::new()");
         let array = env.new_byte_array(src.len() as jsize)?;
         env.set_byte_array_region(array, 0, src)?;
         Ok(ArrayCopyBackByte { array, src, env })
@@ -94,7 +94,7 @@ impl<'a, 'b, 'c> ArrayCopyBackByte<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> Drop for ArrayCopyBackByte<'a, 'b, 'c> {
     fn drop(&mut self) {
-        println!("ArrayCopyBackByte drop()");
+        //println!("ArrayCopyBackByte drop()");
         self.env
             .get_byte_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
