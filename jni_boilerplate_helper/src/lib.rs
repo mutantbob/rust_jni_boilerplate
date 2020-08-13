@@ -10,9 +10,9 @@ use jni::sys::{
     jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jshortArray, jsize,
 };
 use jni::{AttachGuard, JNIEnv};
-use std::any::Any;
-use std::fmt::Write;
-use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
+// use std::any::Any;
+//use std::fmt::Write;
+// use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
 
 mod array_copy_back;
 mod java_runtime_wrappers;
@@ -761,6 +761,7 @@ pub trait JavaConstructible<'a> {
 
 //
 
+/*
 pub fn function_argument_declaration_text(inputs: &[String]) -> String {
     let mut rval = String::new();
     for (idx, type_str) in inputs.iter().enumerate() {
@@ -893,7 +894,9 @@ pub fn tuple_to_string(tuple: &TypeTuple) -> String {
 
     rval
 }
+*/
 
+/*
 pub fn jni_boilerplate_instance_method_invocation(
     rust_name: &str,
     java_name: &str,
@@ -961,7 +964,8 @@ pub fn jni_boilerplate_instance_method_invocation(
     }
     body
 }
-
+*/
+/*
 fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> String {
     let mut tmp = String::new();
     for (i, _arg_type) in argument_types.iter().enumerate() {
@@ -974,7 +978,7 @@ fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> 
     }
     tmp
 }
-
+*/
 /*
 pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     rust_name: &str,
