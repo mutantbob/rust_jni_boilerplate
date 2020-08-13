@@ -10,12 +10,9 @@ use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
-use syn::{FnArg, ReturnType, Type};
+use syn::{FnArg, ReturnType, Type, TypeTuple};
 
-use jni_boilerplate_helper::{
-    jni_boilerplate_instance_method_invocation,
-    jni_boilerplate_unwrapped_instance_method_invocation, type_to_string,
-};
+use jni_boilerplate_helper::{jni_boilerplate_instance_method_invocation, type_to_string};
 
 //
 
@@ -71,8 +68,10 @@ impl Parse for InstanceMacroArguments {
 
 //
 
+/// This macro is designed to be used inside the `impl` of a struct that has at least two fields.
+/// `self.java_this` should be an `AutoLocal`.  `self.jni_env` should be an `&AttachGuard`.
 ///
-/// example:
+/// usage:
 /// <pre>jni_instance_method!{ fn_name[=java_name]([ arg_type1 [,arg_type2...]])[ ->return_type ] }
 /// </pre>
 #[proc_macro]
@@ -109,30 +108,44 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as InstanceMacroArguments);
 
-    let rust_name = macro_args.rust_name.to_string();
-    let java_name = macro_args.java_name.to_string();
+    let rust_name = &macro_args.rust_name;
+    let java_name = &macro_args.java_name;
 
-    let argument_types: Vec<String> = macro_args
-        .signature
-        .parameter_types
+    let arg_types = &macro_args.signature.parameter_types;
+
+    let args_metadata: Vec<AllAboutArg> = arg_types
         .iter()
-        .map(|arg_type| type_to_string(&arg_type, false))
+        .enumerate()
+        .map(|(i, t)| AllAboutArg::new((*t).clone(), i))
         .collect();
 
-    let return_type_str: Option<String> = match &macro_args.return_type {
-        ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some(type_to_string(&ty, false)),
-    };
+    let return_type = bare_type_from_return_type(&macro_args.return_type);
 
-    let body = jni_boilerplate_unwrapped_instance_method_invocation(
-        &rust_name,
-        &java_name,
-        &argument_types,
-        &return_type_str,
-        &macro_args.return_type,
-    );
+    let arg_sig = formal_parameters_tokens(&args_metadata);
 
-    body.parse().unwrap()
+    let decl: Vec<proc_macro2::TokenStream> =
+        initializations_for_parameter_temporaries(&args_metadata, simple_identifier("jni_env"));
+
+    let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
+
+    let body = quote! {
+    pub fn #rust_name(jni_env:&jni::JNIEnv, java_this: &jni::objects::JObject, #arg_sig) -> Result<#return_type, jni::errors::Error>
+    {
+        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
+                                     ConvertJValueToRust};
+
+        #(#decl)*
+
+        let sig = String::from("(") #(+&<#arg_types>::signature_for())* + ")"+&<#return_type>::signature_for();
+
+        let results =
+            jni_env.call_method(*java_this, #java_name, sig,
+                                     &[#(#jvalue_param_array),*])?;
+        #return_type::to_rust(&jni_env, &results)
+    }
+            };
+
+    body.into()
 }
 
 //

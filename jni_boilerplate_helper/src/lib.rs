@@ -975,6 +975,7 @@ fn build_temporaries(argument_types: &[String], jni_env_variable_name: &str) -> 
     tmp
 }
 
+/*
 pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     rust_name: &str,
     java_name: &str,
@@ -1042,6 +1043,7 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
     }
     body
 }
+*/
 
 //
 
