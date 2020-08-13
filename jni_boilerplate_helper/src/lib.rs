@@ -481,6 +481,7 @@ impl<T: JValueNonScalar + ConvertJValueToRust> ConvertJValueToRust for Vec<T> {
 
 //
 
+/// In most cases the type of T should be AutoLocal<'a,'b>
 pub trait ConvertRustToJValue<'a, 'b, T> {
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<T, jni::errors::Error>;
     fn temporary_into_jvalue(tmp: &T) -> JValue<'a>;
@@ -1044,6 +1045,7 @@ pub fn jni_boilerplate_unwrapped_instance_method_invocation(
 
 //
 
+/*
 pub fn jni_boilerplate_constructor_invocation(
     class_name: &str,
     constructor_name: &str,
@@ -1080,3 +1082,4 @@ pub fn jni_boilerplate_constructor_invocation(
     body.push_str("}\n");
     body
 }
+*/

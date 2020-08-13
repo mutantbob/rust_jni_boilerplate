@@ -10,10 +10,10 @@ use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
-use syn::{FnArg, Pat, PatIdent, PatType, ReturnType, Type};
+use syn::{FnArg, ReturnType, Type};
 
 use jni_boilerplate_helper::{
-    jni_boilerplate_constructor_invocation, jni_boilerplate_instance_method_invocation,
+    jni_boilerplate_instance_method_invocation,
     jni_boilerplate_unwrapped_instance_method_invocation, type_to_string,
 };
 
@@ -139,23 +139,22 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
 
 struct ConstructorMacroArgs {
     pub class_name: String,
-    pub constructor_name: String,
+    pub constructor_name: Ident,
     pub signature: MySignature,
 }
 
 impl Parse for ConstructorMacroArgs {
     fn parse(tokens: ParseStream) -> Result<ConstructorMacroArgs, syn::Error> {
         let ident: Ident = tokens.parse()?;
-        let class_name = ident.to_string();
 
         let (constructor_name, mut class_name) = if tokens.peek(Token![=]) {
             let _eq: Token![=] = tokens.parse()?;
-            let constructor_name = class_name;
+            let constructor_name = ident;
             let ident: Ident = tokens.parse()?;
             let class_name = ident.to_string();
             (constructor_name, class_name)
         } else {
-            (String::from("new"), class_name)
+            (simple_identifier("new"), ident.to_string())
         };
         // class name is separated by dots in java code, but by slashes in JNI lookups. *facepalm*
         loop {
@@ -205,22 +204,52 @@ impl Parse for ConstructorMacroArgs {
 pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as ConstructorMacroArgs);
 
-    let constructor_name: &str = &macro_args.constructor_name;
-    let argument_types: Vec<String> = macro_args
-        .signature
-        .parameter_types
+    let arg_types = &macro_args.signature.parameter_types;
+
+    let args_metadata: Vec<AllAboutArg> = arg_types
         .iter()
-        .map(|ty| type_to_string(ty, false))
+        .enumerate()
+        .map(|(i, t)| AllAboutArg::new((*t).clone(), i))
         .collect();
 
     let class_name: &str = &macro_args.class_name;
 
-    let body: String =
-        jni_boilerplate_constructor_invocation(class_name, constructor_name, &argument_types);
+    let rust_name = &macro_args.constructor_name;
 
-    quote::quote! { pants };
+    let arg_sig = match formal_parameters_tokens(&args_metadata) {
+        Ok(val) => val,
+        Err(err) => return TokenStream::from(err.to_compile_error()),
+    };
 
-    body.parse().unwrap()
+    let decl: Vec<proc_macro2::TokenStream> =
+        initializations_for_parameter_temporaries(&args_metadata, simple_identifier("jni_env"));
+
+    let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
+
+    let body = quote! {
+    pub fn #rust_name(jni_env: &'a  jni::AttachGuard<'a>, #arg_sig)
+    -> Result<Self, jni::errors::Error>
+    {
+            use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
+                                         ConvertJValueToRust, JClassWrapper};
+            let cls = jni_env.find_class(#class_name)?;
+            let cls = JClassWrapper {
+                jni_env: &jni_env,
+                cls,
+            };
+
+            #(#decl)*
+
+            let sig = String::from("(")#(+&<#arg_types>::signature_for())* + ")V";
+
+            let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])?;
+            jni_env.exception_check()?;
+
+            Ok(Self::wrap_jobject(jni_env, AutoLocal::new(&jni_env, rval)))
+    }
+        };
+
+    body.into()
 }
 
 //
@@ -308,34 +337,15 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         .map(|(i, t)| AllAboutArg::new((*t).clone(), i))
         .collect();
 
-    let mut arg_sig: syn::punctuated::Punctuated<FnArg, Comma>;
-    arg_sig = syn::punctuated::Punctuated::new();
+    let arg_sig = match formal_parameters_tokens(&args_metadata) {
+        Ok(val) => val,
+        Err(err) => return TokenStream::from(err.to_compile_error()),
+    };
 
-    for arg in &args_metadata {
-        let arg2 = match named_function_argument(&arg.p_name, &arg.a_type) {
-            Ok(val) => val,
-            Err(err) => return TokenStream::from(err.to_compile_error()),
-        };
-        arg_sig.push(arg2)
-    }
+    let decl: Vec<proc_macro2::TokenStream> =
+        initializations_for_parameter_temporaries(&args_metadata, simple_identifier("jni_env"));
 
-    let decl: Vec<proc_macro2::TokenStream> = args_metadata
-        .iter()
-        .map(|metadata| {
-            let tmp_i = &metadata.tmp_ident;
-            let p_i = &metadata.p_ident;
-            quote! {let #tmp_i = #p_i.into_temporary(jni_env)?;}
-        })
-        .collect();
-
-    let jvalue_param_array: Vec<proc_macro2::TokenStream> = args_metadata
-        .iter()
-        .map(|metadata| {
-            let ty = &metadata.a_type;
-            let tmp_i = &metadata.tmp_ident;
-            quote! { <#ty>::temporary_into_jvalue(&#tmp_i) }
-        })
-        .collect();
+    let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
     pub fn #rust_name(jni_env: &jni::JNIEnv, #arg_sig) ->Result<#return_type, jni::errors::Error>
@@ -363,6 +373,44 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     body.into()
 }
 
+fn formal_parameters_tokens(
+    args_metadata: &[AllAboutArg],
+) -> Result<syn::punctuated::Punctuated<FnArg, Comma>, syn::Error> {
+    let mut arg_sig: syn::punctuated::Punctuated<FnArg, Comma> = syn::punctuated::Punctuated::new();
+
+    for arg in args_metadata {
+        let arg2 = named_function_argument(&arg.p_name, &arg.a_type)?;
+        arg_sig.push(arg2)
+    }
+    Ok(arg_sig)
+}
+
+fn value_parameter_array(args_metadata: &[AllAboutArg]) -> Vec<proc_macro2::TokenStream> {
+    args_metadata
+        .iter()
+        .map(|metadata| {
+            let ty = &metadata.a_type;
+            let tmp_i = &metadata.tmp_ident;
+            quote! { <#ty>::temporary_into_jvalue(&#tmp_i) }
+        })
+        .collect()
+}
+
+fn initializations_for_parameter_temporaries(
+    args_metadata: &[AllAboutArg],
+    jni_env_ident: Ident,
+) -> Vec<proc_macro2::TokenStream> {
+    args_metadata
+        .iter()
+        .map(|metadata| {
+            let tmp_i = &metadata.tmp_ident;
+            let p_i = &metadata.p_ident;
+            quote! {let #tmp_i = #p_i.into_temporary(#jni_env_ident)?;}
+        })
+        .collect()
+}
+
+/*
 fn named_function_argument2(name: &str, arg_type: &Type) -> FnArg {
     let arg_ident: PatIdent = PatIdent {
         attrs: vec![],
@@ -382,7 +430,8 @@ fn named_function_argument2(name: &str, arg_type: &Type) -> FnArg {
     let arg2: syn::FnArg = FnArg::Typed(pat_type);
     arg2
 }
-
+*/
+/// returns tokens for <code>name:arg_type</code>
 fn named_function_argument(name: &str, arg_type: &Type) -> Result<FnArg, syn::Error> {
     let id = simple_identifier(name);
     let tokens: proc_macro::TokenStream = quote! { #id:#arg_type }.into();
@@ -390,6 +439,7 @@ fn named_function_argument(name: &str, arg_type: &Type) -> Result<FnArg, syn::Er
     ::syn::parse_macro_input::parse::<FnArg>(tokens)
 }
 
+/// returns (rust_name:Ident, java_name:String)
 fn parse_function_names(tokens: &ParseBuffer) -> Result<(Ident, String), syn::Error> {
     let function_name: Ident = tokens.parse()?;
 
