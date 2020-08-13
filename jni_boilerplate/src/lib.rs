@@ -216,10 +216,7 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 
     let rust_name = &macro_args.constructor_name;
 
-    let arg_sig = match formal_parameters_tokens(&args_metadata) {
-        Ok(val) => val,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
-    };
+    let arg_sig = formal_parameters_tokens(&args_metadata);
 
     let decl: Vec<proc_macro2::TokenStream> =
         initializations_for_parameter_temporaries(&args_metadata, simple_identifier("jni_env"));
@@ -317,17 +314,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let rust_name = &macro_args.rust_name;
     let java_name: &str = &macro_args.java_name;
 
-    let return_type: Type = match &macro_args.return_type {
-        ReturnType::Default => {
-            let ts2: TokenStream = "()".parse().unwrap();
-            let blank: Type = syn::parse_macro_input!(ts2 as Type);
-            blank
-        }
-        ReturnType::Type(_, rt) => {
-            let rt: &Type = rt;
-            (*rt).clone()
-        }
-    };
+    let return_type: Type = bare_type_from_return_type(&macro_args.return_type);
 
     let arg_types = &macro_args.signature.parameter_types;
 
@@ -337,10 +324,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         .map(|(i, t)| AllAboutArg::new((*t).clone(), i))
         .collect();
 
-    let arg_sig = match formal_parameters_tokens(&args_metadata) {
-        Ok(val) => val,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
-    };
+    let arg_sig = formal_parameters_tokens(&args_metadata);
 
     let decl: Vec<proc_macro2::TokenStream> =
         initializations_for_parameter_temporaries(&args_metadata, simple_identifier("jni_env"));
@@ -375,16 +359,20 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
 
 fn formal_parameters_tokens(
     args_metadata: &[AllAboutArg],
-) -> Result<syn::punctuated::Punctuated<FnArg, Comma>, syn::Error> {
+) -> syn::punctuated::Punctuated<FnArg, Comma> {
     let mut arg_sig: syn::punctuated::Punctuated<FnArg, Comma> = syn::punctuated::Punctuated::new();
 
     for arg in args_metadata {
-        let arg2 = named_function_argument(&arg.p_name, &arg.a_type)?;
+        let arg2 = named_function_argument(&arg.p_name, &arg.a_type);
         arg_sig.push(arg2)
     }
-    Ok(arg_sig)
+
+    arg_sig
 }
 
+///
+/// You will probably use the result of this function inside a quote! macro like this:
+/// <pre>&[#(#jvalue_param_array),*]</pre>
 fn value_parameter_array(args_metadata: &[AllAboutArg]) -> Vec<proc_macro2::TokenStream> {
     args_metadata
         .iter()
@@ -432,11 +420,12 @@ fn named_function_argument2(name: &str, arg_type: &Type) -> FnArg {
 }
 */
 /// returns tokens for <code>name:arg_type</code>
-fn named_function_argument(name: &str, arg_type: &Type) -> Result<FnArg, syn::Error> {
+fn named_function_argument(name: &str, arg_type: &Type) -> FnArg {
     let id = simple_identifier(name);
     let tokens: proc_macro::TokenStream = quote! { #id:#arg_type }.into();
     //let x = parse_macro_input!(tokens as FnArg);
     ::syn::parse_macro_input::parse::<FnArg>(tokens)
+        .expect("I did not expect this to be able to fail")
 }
 
 /// returns (rust_name:Ident, java_name:String)
@@ -452,4 +441,20 @@ fn parse_function_names(tokens: &ParseBuffer) -> Result<(Ident, String), syn::Er
         (function_name.clone(), function_name.to_string())
     };
     Ok((rust_name, java_name))
+}
+
+fn bare_type_from_return_type(return_type: &ReturnType) -> Type {
+    match return_type {
+        ReturnType::Default => {
+            let tt: TypeTuple = TypeTuple {
+                paren_token: Default::default(),
+                elems: Default::default(),
+            };
+            Type::Tuple(tt)
+        }
+        ReturnType::Type(_, rt) => {
+            let rt: &Type = rt;
+            (*rt).clone()
+        }
+    }
 }
