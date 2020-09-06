@@ -58,6 +58,8 @@ impl<'a> Widget<'a> {
     jni_instance_method! { echo_short=echo(i16)->i16 }
     jni_instance_method! { echo_int=echo(i32)->i32 }
     jni_instance_method! { echo_long=echo(i64)->i64 }
+
+    jni_instance_method! { to_strings = toStrings() ->Vec<String> }
 }
 
 

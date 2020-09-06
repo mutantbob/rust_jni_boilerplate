@@ -1,5 +1,4 @@
 extern crate jni;
-extern crate syn;
 
 use log::debug;
 
@@ -135,7 +134,10 @@ impl<T: JavaSignatureFor> JavaSignatureFor for Vec<T> {
 
 //
 
+/// The class name JNI needs is separated by /s, not .s .
+/// This is probably the cause of a *lot* of NoClassDefFoundError exceptions.
 pub trait JavaClassNameFor {
+    /// The class name JNI needs is separated by /s, not .s .
     fn java_class_name() -> &'static str;
 }
 
@@ -157,25 +159,25 @@ impl JavaClassNameFor for String {
 /// part of the job of the implementation of the to_rust() method is to release the resources
 /// held by the JValue to prevent memory leaks
 /// (which is probably anything where the JValue has a jobject returned by .l() )
-pub trait ConvertJValueToRust
+pub trait ConvertJValueToRust<'a, 'b>
 where
     Self: std::marker::Sized,
 {
-    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error>;
+    fn to_rust(je: &'b JNIEnv<'a>, val: &JValue<'a>) -> Result<Self, jni::errors::Error>;
 }
 
-impl ConvertJValueToRust for () {
+impl ConvertJValueToRust<'_, '_> for () {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.v()
     }
 }
 
-impl ConvertJValueToRust for bool {
+impl ConvertJValueToRust<'_, '_> for bool {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.z()
     }
 }
-impl ConvertJValueToRust for char {
+impl ConvertJValueToRust<'_, '_> for char {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.c().and_then(|c| match std::char::from_u32(c as u32) {
             None => Err(jni::errors::Error::from_kind(
@@ -186,43 +188,43 @@ impl ConvertJValueToRust for char {
     }
 }
 
-impl ConvertJValueToRust for i8 {
+impl ConvertJValueToRust<'_, '_> for i8 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.b()
     }
 }
 
-impl ConvertJValueToRust for i16 {
+impl ConvertJValueToRust<'_, '_> for i16 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.s()
     }
 }
 
-impl ConvertJValueToRust for i32 {
+impl ConvertJValueToRust<'_, '_> for i32 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.i()
     }
 }
 
-impl ConvertJValueToRust for i64 {
+impl ConvertJValueToRust<'_, '_> for i64 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.j()
     }
 }
 
-impl ConvertJValueToRust for f32 {
+impl ConvertJValueToRust<'_, '_> for f32 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.f()
     }
 }
 
-impl ConvertJValueToRust for f64 {
+impl ConvertJValueToRust<'_, '_> for f64 {
     fn to_rust(_je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         val.d()
     }
 }
 
-impl ConvertJValueToRust for String {
+impl ConvertJValueToRust<'_, '_> for String {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let obj = val.l()?;
         let x = je.get_string(obj.into())?;
@@ -234,7 +236,7 @@ impl ConvertJValueToRust for String {
     }
 }
 
-impl ConvertJValueToRust for Vec<bool> {
+impl ConvertJValueToRust<'_, '_> for Vec<bool> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -262,7 +264,7 @@ pub fn u32_to_char(val: u32) -> Result<char, jni::errors::Error> {
     }
 }
 
-impl ConvertJValueToRust for Vec<char> {
+impl ConvertJValueToRust<'_, '_> for Vec<char> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count = je.get_array_length(*object)?;
@@ -291,7 +293,7 @@ fn vec_u8_into_i8(v: Vec<u8>) -> Vec<i8> {
     unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
 }
 
-impl ConvertJValueToRust for Vec<i8> {
+impl ConvertJValueToRust<'_, '_> for Vec<i8> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let tmp: Vec<u8> =
             //Vec::u8::to_rust
@@ -302,7 +304,7 @@ impl ConvertJValueToRust for Vec<i8> {
     }
 }
 
-impl ConvertJValueToRust for Vec<u8> {
+impl ConvertJValueToRust<'_, '_> for Vec<u8> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let rval = je.convert_byte_array(*object);
@@ -315,7 +317,7 @@ impl ConvertJValueToRust for Vec<u8> {
     }
 }
 
-impl ConvertJValueToRust for Vec<i16> {
+impl ConvertJValueToRust<'_, '_> for Vec<i16> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -331,7 +333,7 @@ impl ConvertJValueToRust for Vec<i16> {
     }
 }
 
-impl ConvertJValueToRust for Vec<i32> {
+impl ConvertJValueToRust<'_, '_> for Vec<i32> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -347,7 +349,7 @@ impl ConvertJValueToRust for Vec<i32> {
     }
 }
 
-impl ConvertJValueToRust for Vec<i64> {
+impl ConvertJValueToRust<'_, '_> for Vec<i64> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -363,7 +365,7 @@ impl ConvertJValueToRust for Vec<i64> {
     }
 }
 
-impl ConvertJValueToRust for Vec<f32> {
+impl ConvertJValueToRust<'_, '_> for Vec<f32> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -379,7 +381,7 @@ impl ConvertJValueToRust for Vec<f32> {
     }
 }
 
-impl ConvertJValueToRust for Vec<f64> {
+impl ConvertJValueToRust<'_, '_> for Vec<f64> {
     fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
@@ -395,12 +397,13 @@ impl ConvertJValueToRust for Vec<f64> {
     }
 }
 
-pub fn convert_jvalue_list_or_array_to_rust<T>(
-    je: &JNIEnv,
-    src: JObject,
+/// does not free the resources referenced by src
+pub fn convert_jvalue_list_or_array_to_rust<'a, 'b, T>(
+    je: &'b JNIEnv<'a>,
+    src: JObject<'a>,
 ) -> Result<Vec<T>, jni::errors::Error>
 where
-    T: ConvertJValueToRust,
+    T: ConvertJValueToRust<'a, 'b>,
 {
     //println!("convert_jvalue_list_or_array_to_rust");
 
@@ -412,9 +415,12 @@ where
     }
 }
 
-pub fn convert_jarray_to_rust<T>(je: &JNIEnv, array: JObject) -> Result<Vec<T>, jni::errors::Error>
+pub fn convert_jarray_to_rust<'a, 'b, T>(
+    je: &'b JNIEnv<'a>,
+    array: JObject,
+) -> Result<Vec<T>, jni::errors::Error>
 where
-    T: ConvertJValueToRust,
+    T: ConvertJValueToRust<'a, 'b>,
 {
     let count = je.get_array_length(*array)?;
     let mut rval: Vec<T> = Vec::new();
@@ -426,12 +432,12 @@ where
     Ok(rval)
 }
 
-pub fn convert_iterable_to_rust_vec<T>(
-    je: &JNIEnv,
-    iterable: JObject,
+pub fn convert_iterable_to_rust_vec<'a, 'b, T>(
+    je: &'b JNIEnv<'a>,
+    iterable: JObject<'a>,
 ) -> Result<Vec<T>, jni::errors::Error>
 where
-    T: ConvertJValueToRust,
+    T: ConvertJValueToRust<'a, 'b>,
 {
     let iter = je.call_method(iterable, "iterator", "()Ljava/util/Iterator;", &[])?;
     let iter = iter.l()?;
@@ -472,10 +478,15 @@ pub trait JValueNonScalar {}
 impl JValueNonScalar for String {}
 impl<T> JValueNonScalar for Vec<T> {}
 
-impl<T: JValueNonScalar + ConvertJValueToRust> ConvertJValueToRust for Vec<T> {
-    fn to_rust(je: &JNIEnv, val: &JValue) -> Result<Self, jni::errors::Error> {
-        let jobject: JObject = val.l()?;
-        convert_jvalue_list_or_array_to_rust(je, jobject)
+impl<'a, 'b, T: JValueNonScalar + ConvertJValueToRust<'a, 'b>> ConvertJValueToRust<'a, 'b>
+    for Vec<T>
+{
+    fn to_rust(je: &'b JNIEnv<'a>, val: &JValue<'a>) -> Result<Self, jni::errors::Error> {
+        let jobject: JObject<'a> = val.l()?;
+        let rval = convert_jvalue_list_or_array_to_rust(je, jobject)?;
+        je.delete_local_ref(jobject)?;
+
+        Ok(rval)
     }
 }
 
@@ -755,8 +766,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackDouble<'a, 'b, 'c>> fo
 
 //
 
-pub trait JavaConstructible<'a> {
-    fn wrap_jobject(jni_env: &'a AttachGuard<'a>, java_this: AutoLocal<'a, 'a>) -> Self;
+pub trait JavaConstructible<'a, 'b> {
+    fn wrap_jobject(jni_env: &'b AttachGuard<'a>, java_this: AutoLocal<'a, 'b>) -> Self;
 }
 
 //

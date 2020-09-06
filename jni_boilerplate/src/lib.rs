@@ -1,3 +1,10 @@
+/*
+
+still need to learn from
+
+https://github.com/dtolnay/syn/blob/master/examples/lazy-static/lazy-static/src/lib.rs
+ */
+
 extern crate proc_macro;
 #[macro_use]
 extern crate syn;
@@ -10,7 +17,7 @@ use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
-use syn::{Expr, FnArg, ReturnType, Type, TypeTuple};
+use syn::{Expr, FnArg, Lifetime, ReturnType, Type, TypeTuple};
 
 //
 
@@ -41,6 +48,8 @@ impl Parse for MySignature {
 //
 
 struct InstanceMacroArguments {
+    pub lifetime_a: Lifetime,
+    pub lifetime_b: Lifetime,
     rust_name: Ident,
     java_name: String,
     signature: MySignature,
@@ -49,6 +58,7 @@ struct InstanceMacroArguments {
 
 impl Parse for InstanceMacroArguments {
     fn parse(tokens: ParseStream) -> Result<InstanceMacroArguments, syn::Error> {
+        let (lifetime_a, lifetime_b) = parse_optional_lifetimes(tokens)?;
         let (rust_name, java_name) = parse_function_names(tokens)?;
 
         let signature: MySignature = tokens.parse()?;
@@ -56,6 +66,8 @@ impl Parse for InstanceMacroArguments {
         let return_type: ReturnType = tokens.parse()?;
 
         Ok(InstanceMacroArguments {
+            lifetime_a,
+            lifetime_b,
             rust_name,
             java_name,
             signature,
@@ -137,6 +149,8 @@ fn bare_jni_env() -> Expr {
 pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as InstanceMacroArguments);
 
+    let lifetime_a = &macro_args.lifetime_a;
+    let lifetime_b = &macro_args.lifetime_b;
     let rust_name = &macro_args.rust_name;
     let java_name = &macro_args.java_name;
 
@@ -158,7 +172,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    pub fn #rust_name(jni_env:&jni::JNIEnv, java_this: &jni::objects::JObject, #arg_sig) -> Result<#return_type, jni::errors::Error>
+    pub fn #rust_name(jni_env:&#lifetime_b jni::JNIEnv<#lifetime_a>, java_this: &jni::objects::JObject<#lifetime_a>, #arg_sig) -> Result<#return_type, jni::errors::Error>
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust};
@@ -170,7 +184,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
         let results =
             jni_env.call_method(*java_this, #java_name, sig,
                                      &[#(#jvalue_param_array),*])?;
-        #return_type::to_rust(&jni_env, &results)
+        #return_type::to_rust(jni_env, &results)
     }
             };
 
@@ -180,6 +194,8 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
 //
 
 struct ConstructorMacroArgs {
+    pub lifetime_a: Lifetime,
+    pub lifetime_b: Lifetime,
     pub class_name: String,
     pub constructor_name: Ident,
     pub signature: MySignature,
@@ -187,6 +203,8 @@ struct ConstructorMacroArgs {
 
 impl Parse for ConstructorMacroArgs {
     fn parse(tokens: ParseStream) -> Result<ConstructorMacroArgs, syn::Error> {
+        let (lifetime_a, lifetime_b) = parse_optional_lifetimes(tokens)?;
+
         let ident: Ident = tokens.parse()?;
 
         let (constructor_name, mut class_name) = if tokens.peek(Token![=]) {
@@ -213,6 +231,8 @@ impl Parse for ConstructorMacroArgs {
         let signature = tokens.parse()?;
 
         Ok(ConstructorMacroArgs {
+            lifetime_a,
+            lifetime_b,
             class_name,
             constructor_name,
             signature,
@@ -246,6 +266,8 @@ impl Parse for ConstructorMacroArgs {
 pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as ConstructorMacroArgs);
 
+    let lifetime_a = &macro_args.lifetime_a;
+    let lifetime_b = &macro_args.lifetime_b;
     let arg_types = &macro_args.signature.parameter_types;
 
     let args_metadata: Vec<AllAboutArg> = arg_types
@@ -266,11 +288,11 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    pub fn #rust_name(jni_env: &'a  jni::AttachGuard<'a>, #arg_sig)
+    pub fn #rust_name(jni_env: &#lifetime_b  jni::AttachGuard<#lifetime_a>, #arg_sig)
     -> Result<Self, jni::errors::Error>
     {
             use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                         ConvertJValueToRust, JClassWrapper};
+                                         ConvertJValueToRust, JClassWrapper, JavaConstructible};
             let cls = jni_env.find_class(#class_name)?;
             let cls = JClassWrapper {
                 jni_env: &jni_env,
@@ -284,7 +306,7 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
             let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])?;
             jni_env.exception_check()?;
 
-            Ok(Self::wrap_jobject(jni_env, AutoLocal::new(&jni_env, rval)))
+            Ok(Self::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
     }
         };
 
@@ -296,14 +318,18 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 //
 
 struct StaticMethodArgs {
+    lifetime_a: Lifetime,
+    lifetime_b: Lifetime,
     rust_name: Ident,
     java_name: String,
     signature: MySignature,
     return_type: ReturnType,
 }
 
-impl<'a> Parse for StaticMethodArgs {
+impl Parse for StaticMethodArgs {
     fn parse(tokens: &ParseBuffer) -> Result<Self, syn::Error> {
+        let (lifetime_a, lifetime_b) = parse_optional_lifetimes(tokens)?;
+
         let (rust_name, java_name) = parse_function_names(tokens)?;
 
         let signature = tokens.parse()?;
@@ -317,6 +343,8 @@ impl<'a> Parse for StaticMethodArgs {
         };
 
         Ok(StaticMethodArgs {
+            lifetime_a,
+            lifetime_b,
             rust_name,
             java_name,
             signature,
@@ -359,6 +387,8 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let return_type: Type = bare_type_from_return_type(&macro_args.return_type);
 
     let arg_types = &macro_args.signature.parameter_types;
+    let lifetime_a = &macro_args.lifetime_a;
+    let lifetime_b = &macro_args.lifetime_b;
 
     let args_metadata: Vec<AllAboutArg> = arg_types
         .iter()
@@ -374,7 +404,8 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    pub fn #rust_name(jni_env: &jni::JNIEnv, #arg_sig) ->Result<#return_type, jni::errors::Error>
+    #[allow(non_snake_case)]
+    pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust};
@@ -498,5 +529,18 @@ fn bare_type_from_return_type(return_type: &ReturnType) -> Type {
             let rt: &Type = rt;
             (*rt).clone()
         }
+    }
+}
+
+fn parse_optional_lifetimes(tokens: &ParseBuffer) -> Result<(Lifetime, Lifetime), syn::Error> {
+    if tokens.peek(Lifetime) {
+        let lifetime_a = tokens.parse()?;
+        let _comma: Token![,] = tokens.parse()?;
+        let lifetime_b = tokens.parse()?;
+        let _comma: Token![,] = tokens.parse()?;
+        Ok((lifetime_a, lifetime_b))
+    } else {
+        let wildcard: Lifetime = Lifetime::new("'_", proc_macro2::Span::call_site());
+        Ok((wildcard.clone(), wildcard))
     }
 }
