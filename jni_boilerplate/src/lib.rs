@@ -113,9 +113,9 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 
     let rt_lifetimes = harvest_lifetimes_type(&return_type);
     let lifetime_kludge = if rt_lifetimes.is_empty() {
-        quote!{}
+        quote! {}
     } else {
-        quote!{< #(#rt_lifetimes,)* >}
+        quote! {< #(#rt_lifetimes,)* >}
     };
 
     let body = quote! {
@@ -606,19 +606,17 @@ fn harvest_lifetimes_generic_argument(val: &GenericArgument) -> Vec<Lifetime> {
 
 #[cfg(test)]
 mod test {
-    use syn::Type;
-    use proc_macro2::TokenStream;
     use super::harvest_lifetimes_type;
+    use proc_macro2::TokenStream;
+    use syn::Type;
 
     #[test]
-    fn test1() -> Result<(), syn::Error>
-    {
+    fn test1() -> Result<(), syn::Error> {
+        let tokens: TokenStream = quote! {
+        Radical<'a, 'd'>
+                };
 
-        let tokens:TokenStream = quote! {
-Radical<'a, 'd'>
-        };
-
-        let rtype: Type = parse_quote!{
+        let rtype: Type = parse_quote! {
         Radical<'a, 'd>
         };
 
