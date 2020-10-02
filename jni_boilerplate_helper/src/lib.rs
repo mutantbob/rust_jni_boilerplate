@@ -493,16 +493,18 @@ impl<'a, 'b, T: JValueNonScalar + ConvertJValueToRust<'a, 'b>> ConvertJValueToRu
 //
 
 /// In most cases the type of T should be AutoLocal<'a,'b>
-pub trait ConvertRustToJValue<'a, 'b, T> {
-    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<T, jni::errors::Error>;
-    fn temporary_into_jvalue(tmp: &T) -> JValue<'a>;
+pub trait ConvertRustToJValue<'a, 'b> {
+    type T;
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, jni::errors::Error>;
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a>;
 }
 
 #[macro_export]
 macro_rules! impl_convert_rust_to_jvalue {
     ( $($t:ty),* ) => {
-    $( impl<'a,'b> ConvertRustToJValue<'a, 'b, $t> for $t
+    $( impl<'a,'b> ConvertRustToJValue<'a, 'b> for $t
     {
+        type T=$t;
         fn into_temporary(self, _je:&'b JNIEnv<'a>) ->Result<$t, jni::errors::Error> { Ok(self) }
         fn temporary_into_jvalue(tmp: &$t) -> JValue<'a>
         {
@@ -514,7 +516,8 @@ macro_rules! impl_convert_rust_to_jvalue {
 
 impl_convert_rust_to_jvalue! { i8, i16, i32, i64, f32, f64 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, char> for char {
+impl<'a, 'b> ConvertRustToJValue<'a, 'b> for char {
+    type T = char;
     fn into_temporary(self, _je: &'b JNIEnv<'a>) -> Result<char, jni::errors::Error> {
         Ok(self)
     }
@@ -523,7 +526,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, char> for char {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, bool> for bool {
+impl<'a, 'b> ConvertRustToJValue<'a, 'b> for bool {
+    type T = bool;
     fn into_temporary(self, _je: &'b JNIEnv<'a>) -> Result<bool, jni::errors::Error> {
         Ok(self)
     }
@@ -532,7 +536,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, bool> for bool {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[bool] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[bool] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jbooleanArray = copy_bool_array_to_jbooleanarray(je, self)?;
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -542,7 +547,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[bool] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[char] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[char] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = copy_char_array_to_jchararray(je, self)?;
 
@@ -553,7 +559,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[char] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i8] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i8] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let shenanigans = unsafe { &*(self as *const [i8] as *const [u8]) };
         let rval = je.byte_array_from_slice(shenanigans)?;
@@ -564,7 +571,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i8] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[u8] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[u8] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = je.byte_array_from_slice(self)?;
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -574,7 +582,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[u8] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &str {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &str {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = je.new_string(self)?;
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -584,7 +593,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &str {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for String {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for String {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = je.new_string(&self)?;
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -608,7 +618,8 @@ impl<'a, 'b, T> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[T]
 }
 */
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i32] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i32] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jintArray = je.new_int_array(self.len() as jsize)?;
         je.set_int_array_region(rval, 0, self)?;
@@ -620,7 +631,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i32] {
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackInt<'a, 'b, 'c>> for &'c mut [i32] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i32] {
+    type T = ArrayCopyBackInt<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -632,7 +644,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackInt<'a, 'b, 'c>> for &
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i16] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i16] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jshortArray = je.new_short_array(self.len() as jsize)?;
         je.set_short_array_region(rval, 0, self)?;
@@ -644,7 +657,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i16] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i64] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i64] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jlongArray = je.new_long_array(self.len() as jsize)?;
         je.set_long_array_region(rval, 0, self)?;
@@ -656,7 +670,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[i64] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[f32] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[f32] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jfloatArray = je.new_float_array(self.len() as jsize)?;
         je.set_float_array_region(rval, 0, self)?;
@@ -668,7 +683,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[f32] {
     }
 }
 
-impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[f64] {
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[f64] {
+    type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jdoubleArray = je.new_double_array(self.len() as jsize)?;
         je.set_double_array_region(rval, 0, self)?;
@@ -680,7 +696,8 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b, AutoLocal<'a, 'b>> for &[f64] {
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackBool<'a, 'b, 'c>> for &'c mut [bool] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [bool] {
+    type T = ArrayCopyBackBool<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -692,7 +709,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackBool<'a, 'b, 'c>> for 
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackChar<'a, 'b, 'c>> for &'c mut [char] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [char] {
+    type T = ArrayCopyBackChar<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -704,7 +722,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackChar<'a, 'b, 'c>> for 
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackShort<'a, 'b, 'c>> for &'c mut [i16] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
+    type T = ArrayCopyBackShort<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -716,7 +735,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackShort<'a, 'b, 'c>> for
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackByte<'a, 'b, 'c>> for &'c mut [i8] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
+    type T = ArrayCopyBackByte<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -728,7 +748,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackByte<'a, 'b, 'c>> for 
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackLong<'a, 'b, 'c>> for &'c mut [i64] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
+    type T = ArrayCopyBackLong<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -740,7 +761,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackLong<'a, 'b, 'c>> for 
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackFloat<'a, 'b, 'c>> for &'c mut [f32] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
+    type T = ArrayCopyBackFloat<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
@@ -752,7 +774,8 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackFloat<'a, 'b, 'c>> for
     }
 }
 
-impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackDouble<'a, 'b, 'c>> for &'c mut [f64] {
+impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
+    type T = ArrayCopyBackDouble<'a, 'b, 'c>;
     fn into_temporary(
         self,
         je: &'b JNIEnv<'a>,
