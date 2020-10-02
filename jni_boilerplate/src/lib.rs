@@ -17,7 +17,7 @@ use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
-use syn::{Expr, FnArg, Lifetime, ReturnType, Type, TypeTuple};
+use syn::{Expr, FnArg, Lifetime, ReturnType, Type, TypePath, TypeTuple};
 
 //
 
@@ -99,7 +99,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
         .map(|(i, t)| AllAboutArg::new((*t).clone(), i))
         .collect();
 
-    let return_type = bare_type_from_return_type(&macro_args.return_type);
+    let return_type: Type = bare_type_from_return_type(&macro_args.return_type);
     //let return_type_prefix = type_prefix_from(return_type.clone());
 
     let arg_sig = formal_parameters_tokens(&args_metadata);
@@ -111,7 +111,15 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
+    let rt_lifetimes = harvest_lifetimes_type(&return_type);
+    let lifetime_kludge = if rt_lifetimes.is_empty() {
+        quote!{}
+    } else {
+        quote!{< #(#rt_lifetimes,)* >}
+    };
+
     let body = quote! {
+    #[allow(non_snake_case)]
     pub fn #rust_name(&self, #arg_sig) -> Result<#return_type, jni::errors::Error>
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
@@ -125,7 +133,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
             self.jni_env.call_method(self.java_this.as_obj(), #java_name, sig,
                                      &[#(#jvalue_param_array),*])?;
 
-        type Item=#return_type; // because of things like Vec<String>
+        type Item#lifetime_kludge=#return_type; // because of things like Vec<String>
         Item::to_rust(self.jni_env, &results)
     }
             };
@@ -542,5 +550,82 @@ fn parse_optional_lifetimes(tokens: &ParseBuffer) -> Result<(Lifetime, Lifetime)
     } else {
         let wildcard: Lifetime = Lifetime::new("'_", proc_macro2::Span::call_site());
         Ok((wildcard.clone(), wildcard))
+    }
+}
+
+use syn::{AngleBracketedGenericArguments, GenericArgument, Path, PathArguments, PathSegment};
+
+fn harvest_lifetimes_type(val: &Type) -> Vec<Lifetime> {
+    match val {
+        Type::Path(path_type) => harvest_lifetimes_path_type(path_type),
+        _ => vec![],
+    }
+}
+
+fn harvest_lifetimes_path_type(val: &TypePath) -> Vec<Lifetime> {
+    harvest_lifetimes_path(&val.path)
+}
+
+fn harvest_lifetimes_path(val: &Path) -> Vec<Lifetime> {
+    let mut rval = vec![];
+
+    for seg in &val.segments {
+        rval.extend(harvest_lifetimes_path_segment(seg))
+    }
+
+    rval
+}
+
+fn harvest_lifetimes_path_segment(val: &PathSegment) -> Vec<Lifetime> {
+    harvest_lifetimes_path_arguments(&val.arguments)
+}
+
+fn harvest_lifetimes_path_arguments(val: &PathArguments) -> Vec<Lifetime> {
+    match val {
+        PathArguments::AngleBracketed(abga) => harvest_lifetimes_abga(abga),
+        _ => vec![],
+    }
+}
+
+fn harvest_lifetimes_abga(val: &AngleBracketedGenericArguments) -> Vec<Lifetime> {
+    let mut rval = vec![];
+    for arg in &val.args {
+        rval.extend(harvest_lifetimes_generic_argument(arg));
+    }
+    rval
+}
+
+fn harvest_lifetimes_generic_argument(val: &GenericArgument) -> Vec<Lifetime> {
+    match val {
+        GenericArgument::Lifetime(lt) => vec![lt.clone()],
+        _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use syn::Type;
+    use proc_macro2::TokenStream;
+    use super::harvest_lifetimes_type;
+
+    #[test]
+    fn test1() -> Result<(), syn::Error>
+    {
+
+        let tokens:TokenStream = quote! {
+Radical<'a, 'd'>
+        };
+
+        let rtype: Type = parse_quote!{
+        Radical<'a, 'd>
+        };
+
+        let lifetimes = harvest_lifetimes_type(&rtype);
+
+        for lt in lifetimes {
+            println!("{:#?}", lt.ident);
+        }
+
+        Ok(())
     }
 }
