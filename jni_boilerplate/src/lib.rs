@@ -180,6 +180,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
+    #[allow(non_snake_case)]
     pub fn #rust_name(jni_env:&#lifetime_b jni::JNIEnv<#lifetime_a>, java_this: &jni::objects::JObject<#lifetime_a>, #arg_sig) -> Result<#return_type, jni::errors::Error>
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
