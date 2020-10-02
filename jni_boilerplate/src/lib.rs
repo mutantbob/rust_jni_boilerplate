@@ -79,7 +79,7 @@ impl Parse for InstanceMacroArguments {
 //
 
 /// This macro is designed to be used inside the `impl` of a struct that has at least two fields.
-/// `self.java_this` should be an `AutoLocal`.  `self.jni_env` should be an `&AttachGuard`.
+/// `self.java_this` should be an `AutoLocal`.  `self.jni_env` should be a `&JNIEnv`.
 ///
 /// usage:
 /// <pre>jni_instance_method!{ fn_name[=java_name]([ arg_type1 [,arg_type2...]])[ ->return_type ] }
@@ -296,14 +296,16 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    pub fn #rust_name(jni_env: &#lifetime_b  jni::AttachGuard<#lifetime_a>, #arg_sig)
+    #[allow(non_snake_case)]
+    pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig)
     -> Result<Self, jni::errors::Error>
     {
             use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                          ConvertJValueToRust, JClassWrapper, JavaConstructible};
+        //struct AssertReturnJC<'a> where Self:JavaConstructible<'a> { phantom: &'a PhantomData<u8>};
             let cls = jni_env.find_class(#class_name)?;
             let cls = JClassWrapper {
-                jni_env: &jni_env,
+                jni_env,
                 cls,
             };
 

@@ -8,7 +8,7 @@ use jni::objects::{AutoLocal, JClass, JObject, JValue};
 use jni::sys::{
     jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jshortArray, jsize,
 };
-use jni::{AttachGuard, JNIEnv};
+use jni::JNIEnv;
 // use std::any::Any;
 //use std::fmt::Write;
 // use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
@@ -767,7 +767,7 @@ impl<'a, 'b, 'c> ConvertRustToJValue<'a, 'b, ArrayCopyBackDouble<'a, 'b, 'c>> fo
 //
 
 pub trait JavaConstructible<'a, 'b> {
-    fn wrap_jobject(jni_env: &'b AttachGuard<'a>, java_this: AutoLocal<'a, 'b>) -> Self;
+    fn wrap_jobject(jni_env: &'b JNIEnv<'a>, java_this: AutoLocal<'a, 'b>) -> Self;
 }
 
 //
