@@ -789,6 +789,38 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
 
 //
 
+/*
+pub enum JavaNullable<T>
+{
+    Null,
+    Some(T),
+}
+
+pub trait ConvertRustToJValueOrNull<'a, 'b>:ConvertRustToJValue<'a,'b>
+{
+    fn as_null() -> <Self as ConvertRustToJValue<'a,'b>>::T;
+}
+
+impl<'a:'b, 'b, T:ConvertRustToJValueOrNull<'a, 'b>> ConvertRustToJValue<'a, 'b> for JavaNullable<T> {
+    type T=<T as ConvertRustToJValue<'a, 'b>>::T;
+    fn into_temporary(self, je: &'b jni::JNIEnv<'a>) -> Result<Self::T, jni::errors::Error> {
+        let rval:Result<AutoLocal<'a,'b>, jni::errors::Error> = match self {
+            crate::JavaNullable::Null => {
+                Ok( <T as ConvertRustToJValueOrNull<'a,'b> >::as_null())
+            },
+            crate::JavaNullable::Some(val) => val.into_temporary(je),
+        };
+
+        rval
+    }
+    fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+*/
+
+//
+
 pub trait JavaConstructible<'a, 'b> {
     fn wrap_jobject(jni_env: &'b JNIEnv<'a>, java_this: AutoLocal<'a, 'b>) -> Self;
 }
