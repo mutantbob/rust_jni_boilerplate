@@ -428,7 +428,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         jni_env.exception_check()?;
 
         #(#decl)*
-        let sig = String::from("(")+#(&<#arg_types>::signature_for())+* + ")"+&<#return_type>::signature_for();
+        let sig = String::from("(")+#(&<#arg_types>::signature_for() +)*  ")"+&<#return_type>::signature_for();
 
         let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
