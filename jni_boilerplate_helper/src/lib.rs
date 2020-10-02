@@ -827,6 +827,107 @@ pub trait JavaConstructible<'a, 'b> {
 
 //
 
+///
+/// This creates a trivial rust struct for wrapping a java object reference.
+/// The struct will have two fields:
+///
+/// * `java_this` will be an AutoLocal
+/// * `jni_env` is the reference to the JNI environment the object lives in
+///
+///  The structure is just right for use with the
+/// `jni_constructor!`, `jni_instance_method!`, and `static_method!` macros.
+///
+/// usage:
+///
+/// ` jni_wrapper_cliche! { rust_type_name, "package/path/to/java/class" }`
+///
+#[macro_export]
+macro_rules! jni_wrapper_cliche_impl {
+    ($ty:ident, $java_class_slash:literal) => {
+        pub struct $ty<'a: 'b, 'b> {
+            #[allow(dead_code)]
+            java_this: jni::objects::AutoLocal<'a, 'b>,
+            #[allow(dead_code)]
+            jni_env: &'b jni::JNIEnv<'a>,
+        }
+
+        impl<'a, 'b> $ty<'a, 'b> {
+            pub fn null(jni_env: &'b jni::JNIEnv<'a>) -> $ty<'a, 'b> {
+                $ty {
+                    java_this: jni::objects::AutoLocal::new(jni_env, jni::objects::JObject::null()),
+                    jni_env,
+                }
+            }
+        }
+
+        impl<'a, 'b> crate::JValueNonScalar for $ty<'a, 'b> {}
+
+        impl<'a, 'b> jni_boilerplate_helper::JavaClassNameFor for $ty<'a, 'b> {
+            fn java_class_name() -> &'static str {
+                $java_class_slash
+            }
+        }
+
+        impl<'a, 'b> crate::JavaConstructible<'a, 'b> for $ty<'a, 'b> {
+            fn wrap_jobject(
+                jni_env: &'b jni::JNIEnv<'a>,
+                java_this: jni::objects::AutoLocal<'a, 'b>,
+            ) -> Self {
+                $ty { java_this, jni_env }
+            }
+        }
+
+        impl<'a, 'b> crate::JavaSignatureFor for $ty<'a, 'b> {
+            fn signature_for() -> String {
+                String::from(concat!("L", $java_class_slash, ";"))
+            }
+        }
+
+        impl<'a, 'b> crate::JavaSignatureFor for &$ty<'a, 'b> {
+            fn signature_for() -> String {
+                String::from(concat!("L", $java_class_slash, ";"))
+            }
+        }
+
+        impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for &$ty<'a, 'b> {
+            type T = jni::sys::jobject;
+            fn into_temporary(
+                self,
+                _je: &'b jni::JNIEnv<'a>,
+            ) -> Result<jni::sys::jobject, jni::errors::Error> {
+                Ok(*self.java_this.as_obj())
+            }
+
+            fn temporary_into_jvalue(tmp: &jni::sys::jobject) -> jni::objects::JValue<'a> {
+                jni::objects::JValue::from(*tmp)
+            }
+        }
+
+        impl<'a: 'b, 'b> crate::ConvertJValueToRust<'a, 'b> for $ty<'a, 'b> {
+            fn to_rust(
+                jni_env: &'b jni::JNIEnv<'a>,
+                val: &jni::objects::JValue<'a>,
+            ) -> Result<Self, jni::errors::Error> {
+                Ok($ty {
+                    java_this: jni::objects::AutoLocal::new(jni_env, val.l()?),
+                    jni_env,
+                })
+            }
+        }
+        /*
+        impl<'a, 'b> ConvertRustToJValueOrNull<'a,'b> for $ty<'a, 'b>
+        {
+            fn as_null() -> jobject {
+                let null1:jni::sys::jobject = std::ptr::null() as *mut _;
+                null1
+           }
+        }
+        */
+    };
+}
+
+//
+
 /*
 pub fn function_argument_declaration_text(inputs: &[String]) -> String {
     let mut rval = String::new();
