@@ -418,7 +418,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                     ConvertJValueToRust};
+                                     ConvertJValueToRust,JClassWrapper,JavaClassNameFor};
 
         let cls = jni_env.find_class(&<Self>::java_class_name())?;
         let cls = JClassWrapper {
