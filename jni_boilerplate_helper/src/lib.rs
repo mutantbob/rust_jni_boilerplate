@@ -5,10 +5,9 @@ use log::debug;
 use crate::array_copy_back::*;
 use java_runtime_wrappers::class_is_array;
 use jni::objects::{AutoLocal, JClass, JObject, JValue};
-use jni::sys::{
-    jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jshortArray, jsize,
-};
+use jni::sys::{jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jshortArray, jsize, jobjectArray};
 use jni::JNIEnv;
+use jni::errors::Error;
 // use std::any::Any;
 //use std::fmt::Write;
 // use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
@@ -477,6 +476,7 @@ pub trait JValueNonScalar {}
 
 impl JValueNonScalar for String {}
 impl<T> JValueNonScalar for Vec<T> {}
+impl<T> JValueNonScalar for &[T] {}
 
 impl<'a, 'b, T: JValueNonScalar + ConvertJValueToRust<'a, 'b>> ConvertJValueToRust<'a, 'b>
     for Vec<T>
@@ -787,37 +787,49 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
     }
 }
 
-//
-
-/*
-pub enum JavaNullable<T>
+impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for Vec<T>
+where T:ConvertRustToJValue<'a,'b, T=AutoLocal<'a,'b>>+JavaSignatureFor+JValueNonScalar
 {
-    Null,
-    Some(T),
-}
+    type T = AutoLocal<'a,'b>;
 
-pub trait ConvertRustToJValueOrNull<'a, 'b>:ConvertRustToJValue<'a,'b>
-{
-    fn as_null() -> <Self as ConvertRustToJValue<'a,'b>>::T;
-}
-
-impl<'a:'b, 'b, T:ConvertRustToJValueOrNull<'a, 'b>> ConvertRustToJValue<'a, 'b> for JavaNullable<T> {
-    type T=<T as ConvertRustToJValue<'a, 'b>>::T;
-    fn into_temporary(self, je: &'b jni::JNIEnv<'a>) -> Result<Self::T, jni::errors::Error> {
-        let rval:Result<AutoLocal<'a,'b>, jni::errors::Error> = match self {
-            crate::JavaNullable::Null => {
-                Ok( <T as ConvertRustToJValueOrNull<'a,'b> >::as_null())
-            },
-            crate::JavaNullable::Some(val) => val.into_temporary(je),
-        };
-
-        rval
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let cls = je.find_class(T::signature_for())?;
+        let rval:jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        for (i, val) in self.into_iter().enumerate() {
+            let x:AutoLocal<'a,'b> = val.into_temporary(je)?;
+            let x:JObject = x.as_obj();
+            je.set_object_array_element(rval, i as i32, x)?;
+        }
+        Ok(AutoLocal::new(je, JObject::from(rval)))
     }
-    fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
         JValue::from(tmp.as_obj())
     }
 }
-*/
+
+impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for &[T]
+where T:ConvertRustToJValue<'a,'b, T=AutoLocal<'a,'b>>+JavaSignatureFor+JValueNonScalar+Copy
+{
+    type T = AutoLocal<'a,'b>;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let cls = je.find_class(T::signature_for())?;
+        let rval:jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        for (i, val) in self.iter().enumerate() {
+            let x:AutoLocal<'a,'b> = val.into_temporary(je)?;
+            let x:JObject = x.as_obj();
+            je.set_object_array_element(rval, i as i32, x)?;
+        }
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+
+//
 
 //
 
