@@ -230,6 +230,10 @@ impl Parse for ConstructorMacroArgs {
             if tokens.peek(Token![.]) {
                 let _dot: Token![.] = tokens.parse()?;
                 class_name.push_str("/"); // yeah, JNI is weird
+            } else if tokens.peek(Token![$]) {
+                // inner class?
+                let _dot: Token![$] = tokens.parse()?;
+                class_name.push_str("$");
             } else {
                 break;
             }
