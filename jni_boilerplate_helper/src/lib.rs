@@ -724,8 +724,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [char] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
     type T = ArrayCopyBackShort<'a, 'b, 'c>;
-    fn into_temporary(
-        self,
+    fn into_temporary(self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackShort<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackShort::new(self, je)
@@ -737,8 +736,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
     type T = ArrayCopyBackByte<'a, 'b, 'c>;
-    fn into_temporary(
-        self,
+    fn into_temporary(self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackByte<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackByte::new(self, je)
@@ -750,8 +748,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
     type T = ArrayCopyBackLong<'a, 'b, 'c>;
-    fn into_temporary(
-        self,
+    fn into_temporary(self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackLong<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackLong::new(self, je)
@@ -763,8 +760,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
     type T = ArrayCopyBackFloat<'a, 'b, 'c>;
-    fn into_temporary(
-        self,
+    fn into_temporary(self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackFloat<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackFloat::new(self, je)
@@ -776,8 +772,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
     type T = ArrayCopyBackDouble<'a, 'b, 'c>;
-    fn into_temporary(
-        self,
+    fn into_temporary(self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackDouble<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackDouble::new(self, je)
@@ -903,8 +898,7 @@ macro_rules! jni_wrapper_cliche_impl {
 
         impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for &$ty<'a, 'b> {
             type T = jni::sys::jobject;
-            fn into_temporary(
-                self,
+            fn into_temporary(self,
                 _je: &'b jni::JNIEnv<'a>,
             ) -> Result<jni::sys::jobject, jni::errors::Error> {
                 Ok(*self.java_this.as_obj())
