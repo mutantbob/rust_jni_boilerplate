@@ -141,6 +141,25 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     body.into()
 }
 
+fn harvest_remainder_java_class_name(tokens: &ParseBuffer, mut class_name: String) ->Result<String, syn::Error> {
+    // class name is separated by dots in java code, but by slashes in JNI lookups. *facepalm*
+    loop {
+        if tokens.peek(Token![.]) {
+            let _dot: Token![.] = tokens.parse()?;
+            class_name.push_str("/"); // yeah, JNI is weird
+        } else if tokens.peek(Token![$]) {
+            // inner class?
+            let _dot: Token![$] = tokens.parse()?;
+            class_name.push_str("$");
+        } else {
+            break;
+        }
+        let ident: Ident = tokens.parse()?;
+        class_name.push_str(&ident.to_string());
+    }
+    Ok(class_name)
+}
+
 fn self_jni_env() -> Expr {
     let ts: proc_macro::TokenStream = quote! { self.jni_env }.into();
     let expr: Expr = syn::parse_macro_input::parse::<Expr>(ts).expect("how could parsing fail?");
@@ -216,7 +235,7 @@ impl Parse for ConstructorMacroArgs {
 
         let ident: Ident = tokens.parse()?;
 
-        let (constructor_name, mut class_name) = if tokens.peek(Token![=]) {
+        let (constructor_name, class_name) = if tokens.peek(Token![=]) {
             let _eq: Token![=] = tokens.parse()?;
             let constructor_name = ident;
             let ident: Ident = tokens.parse()?;
@@ -225,21 +244,7 @@ impl Parse for ConstructorMacroArgs {
         } else {
             (simple_identifier("new"), ident.to_string())
         };
-        // class name is separated by dots in java code, but by slashes in JNI lookups. *facepalm*
-        loop {
-            if tokens.peek(Token![.]) {
-                let _dot: Token![.] = tokens.parse()?;
-                class_name.push_str("/"); // yeah, JNI is weird
-            } else if tokens.peek(Token![$]) {
-                // inner class?
-                let _dot: Token![$] = tokens.parse()?;
-                class_name.push_str("$");
-            } else {
-                break;
-            }
-            let ident: Ident = tokens.parse()?;
-            class_name.push_str(&ident.to_string());
-        }
+        let class_name = harvest_remainder_java_class_name(tokens, class_name)?;
 
         let signature = tokens.parse()?;
 
@@ -608,6 +613,92 @@ fn harvest_lifetimes_generic_argument(val: &GenericArgument) -> Vec<Lifetime> {
         _ => vec![],
     }
 }
+
+//
+
+struct FieldArgs {
+    rust_name: Ident,
+    java_name: String,
+    rust_type: Type,
+    java_type: Option<String>,
+}
+
+impl Parse for FieldArgs {
+    fn parse(input: &ParseBuffer) -> Result<Self, syn::Error> {
+
+        let rust_name: Ident = input.parse()?;
+        let java_name: String = if input.peek(Token![=]) {
+            let _eq: Token![=] = input.parse()?;
+            let java_name: Ident = input.parse()?;
+            java_name.to_string()
+        } else {
+            rust_name.to_string()
+        };
+        let _colon: Token![:] = input.parse()?;
+        let rust_type = input.parse()?;
+        let java_type = if input.peek(Token![=]) {
+            let _eq:Token![=] = input.parse()?;
+            let ident:Ident = input.parse()?;
+            let java_name = harvest_remainder_java_class_name(input, ident.to_string())?;
+            Some(java_name)
+        } else {
+            None
+        };
+
+        Ok(FieldArgs {
+            rust_name,
+            java_name,
+            rust_type,
+            java_type,
+        })
+    }
+}
+
+/// sketch:  jni_field!{ xform: AffineTransform }
+/// sketch:  jni_field!{ transform=xform: AffineTransform }
+#[proc_macro]
+pub fn jni_field(t_stream: TokenStream) -> TokenStream {
+    let macro_args:FieldArgs = syn::parse_macro_input!(t_stream as FieldArgs);
+    let rust_name = macro_args.rust_name;
+    let java_name = macro_args.java_name;
+    let rust_type = macro_args.rust_type;
+
+    let getter = Ident::new(&format!("get_{}",rust_name.to_string()), rust_name.span());
+
+    let java_type = match macro_args.java_type {
+        None => {
+            quote! { <#rust_type as JavaSignatureFor>::signature_for() }
+        }
+        Some(ty) => {
+            let ty = format!("L{};", ty.to_string());
+            quote!{ #ty }
+        }
+    };
+
+    let body = quote! {
+        #[allow(non_snake_case)]
+    pub fn #getter(&self) -> Result<#rust_type, jni::errors::Error> {
+    //panic!("pants")
+    //type T = #rust_type;
+      ConvertJValueToRust::to_rust(self.jni_env,
+          &self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)?)
+    }
+    };
+
+    println!("body = {}", body);
+
+    body.into()
+}
+
+/*
+  pub fn get_xform(&self) -> Result<AffineTransform<'a, 'b>, jni::errors::Error> {
+       ConvertJValueToRust::to_rust(self.jni_env,
+                                    &self.jni_env.get_field(self.java_this.as_obj(), "xform", AffineTransform::signature_for())?
+       )
+   }
+*/
+
+//
 
 #[cfg(test)]
 mod test {
