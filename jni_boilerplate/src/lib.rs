@@ -661,12 +661,13 @@ impl Parse for FieldArgs {
 /// sketch:  jni_field!{ transform=xform: AffineTransform }
 #[proc_macro]
 pub fn jni_field(t_stream: TokenStream) -> TokenStream {
-    let macro_args:FieldArgs = syn::parse_macro_input!(t_stream as FieldArgs);
+    let macro_args: FieldArgs = syn::parse_macro_input!(t_stream as FieldArgs);
     let rust_name = macro_args.rust_name;
     let java_name = macro_args.java_name;
     let rust_type = macro_args.rust_type;
 
-    let getter = Ident::new(&format!("get_{}",rust_name.to_string()), rust_name.span());
+    let getter = Ident::new(&format!("get_{}", rust_name.to_string()), rust_name.span());
+    let setter = Ident::new(&format!("set_{}", rust_name.to_string()), rust_name.span());
 
     let java_type = match macro_args.java_type {
         None => {
@@ -681,10 +682,22 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     let body = quote! {
         #[allow(non_snake_case)]
     pub fn #getter(&self) -> Result<#rust_type, jni::errors::Error> {
+        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
+                                     ConvertJValueToRust,JClassWrapper,JavaClassNameFor};
+
     //panic!("pants")
     //type T = #rust_type;
       <#rust_type as ConvertJValueToRust>::to_rust(self.jni_env,
           &self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)?)
+    }
+
+    pub fn #setter(&self, new_val: #rust_type) -> Result<(), jni::errors::Error>
+    {
+    use jni_boilerplate_helper::{ConvertRustToJValue,JavaSignatureFor};
+    let tmp = ConvertRustToJValue::into_temporary(new_val, self.jni_env)?;
+    self.jni_env.set_field(self.java_this.as_obj(), #java_name,
+    #java_type,
+    <&#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp))
     }
     };
 

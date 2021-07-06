@@ -510,7 +510,17 @@ macro_rules! impl_convert_rust_to_jvalue {
         {
         (*tmp).into()
         }
-    }) *
+    }
+    impl<'a,'b> ConvertRustToJValue<'a, 'b> for &$t
+        {
+            type T=$t;
+            fn into_temporary(self, _je:&'b JNIEnv<'a>) ->Result<$t, jni::errors::Error> { Ok(*self) }
+            fn temporary_into_jvalue(tmp: &$t) -> JValue<'a>
+            {
+            (*tmp).into()
+            }
+        }
+        ) *
     }
 }
 
@@ -597,6 +607,17 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for String {
     type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = je.new_string(&self)?;
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+    fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &String {
+    type T = AutoLocal<'a, 'b>;
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
+        let rval = je.new_string(self)?;
         Ok(AutoLocal::new(je, JObject::from(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
@@ -904,7 +925,20 @@ macro_rules! jni_wrapper_cliche_impl {
                 Ok(*self.java_this.as_obj())
             }
 
-            fn temporary_into_jvalue(tmp: &jni::sys::jobject) -> jni::objects::JValue<'a> {
+            fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
+                jni::objects::JValue::from(*tmp)
+            }
+        }
+
+        impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for $ty<'a, 'b> {
+            type T = jni::sys::jobject;
+            fn into_temporary(self,
+                _je: &'b jni::JNIEnv<'a>,
+            ) -> Result<jni::sys::jobject, jni::errors::Error> {
+                Ok(*self.java_this.as_obj())
+            }
+
+            fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
                 jni::objects::JValue::from(*tmp)
             }
         }
@@ -920,15 +954,6 @@ macro_rules! jni_wrapper_cliche_impl {
                 })
             }
         }
-        /*
-        impl<'a, 'b> ConvertRustToJValueOrNull<'a,'b> for $ty<'a, 'b>
-        {
-            fn as_null() -> jobject {
-                let null1:jni::sys::jobject = std::ptr::null() as *mut _;
-                null1
-           }
-        }
-        */
     };
 }
 
