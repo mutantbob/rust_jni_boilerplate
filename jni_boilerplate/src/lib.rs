@@ -149,11 +149,11 @@ fn harvest_remainder_java_class_name(
     loop {
         if tokens.peek(Token![.]) {
             let _dot: Token![.] = tokens.parse()?;
-            class_name.push_str("/"); // yeah, JNI is weird
+            class_name.push('/'); // yeah, JNI is weird
         } else if tokens.peek(Token![$]) {
             // inner class?
             let _dot: Token![$] = tokens.parse()?;
-            class_name.push_str("$");
+            class_name.push('$');
         } else {
             break;
         }
@@ -640,8 +640,8 @@ impl Parse for FieldArgs {
         let _colon: Token![:] = input.parse()?;
         let rust_type = input.parse()?;
         let java_type = if input.peek(Token![=]) {
-            let _eq:Token![=] = input.parse()?;
-            let ident:Ident = input.parse()?;
+            let _eq: Token![=] = input.parse()?;
+            let ident: Ident = input.parse()?;
             let java_name = harvest_remainder_java_class_name(input, ident.to_string())?;
             Some(java_name)
         } else {
@@ -674,7 +674,7 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
             quote! { <#rust_type as JavaSignatureFor>::signature_for() }
         }
         Some(ty) => {
-            let ty = format!("L{};", ty.to_string());
+            let ty = format!("L{};", ty);
             quote! { #ty }
         }
     };

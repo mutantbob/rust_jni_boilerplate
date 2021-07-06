@@ -229,7 +229,7 @@ impl ConvertJValueToRust<'_, '_> for String {
         let x = je.get_string(obj.into())?;
         let result = x.to_str();
         match result {
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
             Ok(rval) => Ok(String::from(rval)),
         }
     }
