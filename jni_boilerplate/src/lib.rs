@@ -127,21 +127,24 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 
         #(#decl)*
 
-        let sig = String::from("(") #(+&<#arg_types>::signature_for())* + ")"+&<#return_type>::signature_for();
+        let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type as JavaSignatureFor>::signature_for();
 
         let results =
             self.jni_env.call_method(self.java_this.as_obj(), #java_name, sig,
                                      &[#(#jvalue_param_array),*])?;
 
         type Item#lifetime_kludge=#return_type; // because of things like Vec<String>
-        Item::to_rust(self.jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, &results)
     }
             };
 
     body.into()
 }
 
-fn harvest_remainder_java_class_name(tokens: &ParseBuffer, mut class_name: String) ->Result<String, syn::Error> {
+fn harvest_remainder_java_class_name(
+    tokens: &ParseBuffer,
+    mut class_name: String,
+) -> Result<String, syn::Error> {
     // class name is separated by dots in java code, but by slashes in JNI lookups. *facepalm*
     loop {
         if tokens.peek(Token![.]) {
@@ -207,12 +210,12 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
 
         #(#decl)*
 
-        let sig = String::from("(") #(+&<#arg_types>::signature_for())* + ")"+&<#return_type>::signature_for();
+        let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type>::signature_for();
 
         let results =
             jni_env.call_method(*java_this, #java_name, sig,
                                      &[#(#jvalue_param_array),*])?;
-        #return_type::to_rust(jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(jni_env, &results)
     }
             };
 
@@ -321,12 +324,12 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 
             #(#decl)*
 
-            let sig = String::from("(")#(+&<#arg_types>::signature_for())* + ")V";
+            let sig = String::from("(")#(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")V";
 
             let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])?;
             jni_env.exception_check()?;
 
-            Ok(Self::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
+            Ok(<Self as JavaConstructible>::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
     }
         };
 
@@ -438,12 +441,12 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         jni_env.exception_check()?;
 
         #(#decl)*
-        let sig = String::from("(")+#(&<#arg_types>::signature_for() +)*  ")"+&<#return_type>::signature_for();
+        let sig = String::from("(")+#(&<#arg_types as JavaSignatureFor>::signature_for() +)*  ")"+&<#return_type as JavaSignatureFor>::signature_for();
 
         let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
 
-        <#return_type>::to_rust(jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(jni_env, &results)
     }
     };
 
@@ -472,7 +475,7 @@ fn value_parameter_array(args_metadata: &[AllAboutArg]) -> Vec<proc_macro2::Toke
         .map(|metadata| {
             let ty = &metadata.a_type;
             let tmp_i = &metadata.tmp_ident;
-            quote! { <#ty>::temporary_into_jvalue(&#tmp_i) }
+            quote! { <#ty as ConvertRustToJValue>::temporary_into_jvalue(&#tmp_i) }
         })
         .collect()
 }
@@ -486,7 +489,7 @@ fn initializations_for_parameter_temporaries(
         .map(|metadata| {
             let tmp_i = &metadata.tmp_ident;
             let p_i = &metadata.p_ident;
-            quote! {let #tmp_i = #p_i.into_temporary(#jni_env_ident)?;}
+            quote! {let #tmp_i = ConvertRustToJValue::into_temporary(#p_i, #jni_env_ident)?;}
         })
         .collect()
 }
@@ -671,7 +674,7 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
         }
         Some(ty) => {
             let ty = format!("L{};", ty.to_string());
-            quote!{ #ty }
+            quote! { #ty }
         }
     };
 
@@ -680,12 +683,12 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     pub fn #getter(&self) -> Result<#rust_type, jni::errors::Error> {
     //panic!("pants")
     //type T = #rust_type;
-      ConvertJValueToRust::to_rust(self.jni_env,
+      <#rust_type as ConvertJValueToRust>::to_rust(self.jni_env,
           &self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)?)
     }
     };
 
-    println!("body = {}", body);
+    //println!("body = {}", body);
 
     body.into()
 }
