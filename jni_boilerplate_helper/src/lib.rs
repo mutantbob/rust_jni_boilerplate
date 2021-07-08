@@ -230,7 +230,12 @@ impl ConvertJValueToRust<'_, '_> for String {
         let result = x.to_str();
         match result {
             Err(e) => panic!("{}", e),
-            Ok(rval) => Ok(String::from(rval)),
+            Ok(rval) => {
+                let rval = String::from(rval);
+                drop (x);
+                je.delete_local_ref(obj)?;
+                Ok(rval)
+            },
         }
     }
 }
@@ -451,6 +456,8 @@ where
         let val: T = T::to_rust(je, &val)?;
         rval.push(val);
     }
+
+    je.delete_local_ref(iter)?;
 
     Ok(rval)
 }
