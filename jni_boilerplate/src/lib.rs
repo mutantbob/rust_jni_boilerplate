@@ -134,7 +134,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
                                      &[#(#jvalue_param_array),*])?;
 
         type Item#lifetime_kludge=#return_type; // because of things like Vec<String>
-        <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, results)
     }
             };
 
@@ -215,7 +215,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
         let results =
             jni_env.call_method(*java_this, #java_name, sig,
                                      &[#(#jvalue_param_array),*])?;
-        <#return_type as ConvertJValueToRust>::to_rust(jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
     }
             };
 
@@ -446,7 +446,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
         let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
         jni_env.exception_check()?;
 
-        <#return_type as ConvertJValueToRust>::to_rust(jni_env, &results)
+        <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
     }
     };
 
@@ -687,7 +687,7 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     //panic!("pants")
     //type T = #rust_type;
       <#rust_type as ConvertJValueToRust>::to_rust(self.jni_env,
-          &self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)?)
+          self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)?)
     }
 
     pub fn #setter(&self, new_val: #rust_type) -> Result<(), jni::errors::Error>
