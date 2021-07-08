@@ -4,10 +4,13 @@ use log::debug;
 
 use crate::array_copy_back::*;
 use java_runtime_wrappers::class_is_array;
-use jni::objects::{AutoLocal, JClass, JObject, JValue};
-use jni::sys::{jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jshortArray, jsize, jobjectArray};
-use jni::JNIEnv;
 use jni::errors::Error;
+use jni::objects::{AutoLocal, JClass, JObject, JValue};
+use jni::sys::{
+    jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jobjectArray,
+    jshortArray, jsize,
+};
+use jni::JNIEnv;
 // use std::any::Any;
 //use std::fmt::Write;
 // use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
@@ -232,10 +235,10 @@ impl ConvertJValueToRust<'_, '_> for String {
             Err(e) => panic!("{}", e),
             Ok(rval) => {
                 let rval = String::from(rval);
-                drop (x);
+                drop(x);
                 je.delete_local_ref(obj)?;
                 Ok(rval)
-            },
+            }
         }
     }
 }
@@ -752,7 +755,8 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [char] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
     type T = ArrayCopyBackShort<'a, 'b, 'c>;
-    fn into_temporary(self,
+    fn into_temporary(
+        self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackShort<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackShort::new(self, je)
@@ -764,7 +768,8 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
     type T = ArrayCopyBackByte<'a, 'b, 'c>;
-    fn into_temporary(self,
+    fn into_temporary(
+        self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackByte<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackByte::new(self, je)
@@ -776,7 +781,8 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
     type T = ArrayCopyBackLong<'a, 'b, 'c>;
-    fn into_temporary(self,
+    fn into_temporary(
+        self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackLong<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackLong::new(self, je)
@@ -788,7 +794,8 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
     type T = ArrayCopyBackFloat<'a, 'b, 'c>;
-    fn into_temporary(self,
+    fn into_temporary(
+        self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackFloat<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackFloat::new(self, je)
@@ -800,7 +807,8 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
 
 impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
     type T = ArrayCopyBackDouble<'a, 'b, 'c>;
-    fn into_temporary(self,
+    fn into_temporary(
+        self,
         je: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackDouble<'a, 'b, 'c>, jni::errors::Error> {
         ArrayCopyBackDouble::new(self, je)
@@ -811,16 +819,17 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
 }
 
 impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for Vec<T>
-where T:ConvertRustToJValue<'a,'b, T=AutoLocal<'a,'b>>+JavaSignatureFor+JValueNonScalar
+where
+    T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>> + JavaSignatureFor + JValueNonScalar,
 {
-    type T = AutoLocal<'a,'b>;
+    type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
         let cls = je.find_class(T::signature_for())?;
-        let rval:jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.into_iter().enumerate() {
-            let x:AutoLocal<'a,'b> = val.into_temporary(je)?;
-            let x:JObject = x.as_obj();
+            let x: AutoLocal<'a, 'b> = val.into_temporary(je)?;
+            let x: JObject = x.as_obj();
             je.set_object_array_element(rval, i as i32, x)?;
         }
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -832,16 +841,20 @@ where T:ConvertRustToJValue<'a,'b, T=AutoLocal<'a,'b>>+JavaSignatureFor+JValueNo
 }
 
 impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for &[T]
-where T:ConvertRustToJValue<'a,'b, T=AutoLocal<'a,'b>>+JavaSignatureFor+JValueNonScalar+Copy
+where
+    T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>>
+        + JavaSignatureFor
+        + JValueNonScalar
+        + Copy,
 {
-    type T = AutoLocal<'a,'b>;
+    type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
         let cls = je.find_class(T::signature_for())?;
-        let rval:jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.iter().enumerate() {
-            let x:AutoLocal<'a,'b> = val.into_temporary(je)?;
-            let x:JObject = x.as_obj();
+            let x: AutoLocal<'a, 'b> = val.into_temporary(je)?;
+            let x: JObject = x.as_obj();
             je.set_object_array_element(rval, i as i32, x)?;
         }
         Ok(AutoLocal::new(je, JObject::from(rval)))
@@ -926,7 +939,8 @@ macro_rules! jni_wrapper_cliche_impl {
 
         impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for &$ty<'a, 'b> {
             type T = jni::sys::jobject;
-            fn into_temporary(self,
+            fn into_temporary(
+                self,
                 _je: &'b jni::JNIEnv<'a>,
             ) -> Result<jni::sys::jobject, jni::errors::Error> {
                 Ok(*self.java_this.as_obj())
@@ -939,7 +953,8 @@ macro_rules! jni_wrapper_cliche_impl {
 
         impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for $ty<'a, 'b> {
             type T = jni::sys::jobject;
-            fn into_temporary(self,
+            fn into_temporary(
+                self,
                 _je: &'b jni::JNIEnv<'a>,
             ) -> Result<jni::sys::jobject, jni::errors::Error> {
                 Ok(*self.java_this.as_obj())

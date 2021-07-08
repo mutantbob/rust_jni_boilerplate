@@ -628,7 +628,6 @@ struct FieldArgs {
 
 impl Parse for FieldArgs {
     fn parse(input: &ParseBuffer) -> Result<Self, syn::Error> {
-
         let rust_name: Ident = input.parse()?;
         let java_name: String = if input.peek(Token![=]) {
             let _eq: Token![=] = input.parse()?;
