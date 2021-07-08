@@ -979,6 +979,113 @@ macro_rules! jni_wrapper_cliche_impl {
     };
 }
 
+#[macro_export]
+macro_rules! jni_wrapper_cliche_impl_T {
+    ($ty:ident, $java_class_slash:literal) => {
+        pub struct $ty<'a: 'b, 'b, T: ConvertJValueToRust<'a, 'b>> {
+            #[allow(dead_code)]
+            java_this: jni::objects::AutoLocal<'a, 'b>,
+            #[allow(dead_code)]
+            jni_env: &'b jni::JNIEnv<'a>,
+            phantom: PhantomData<T>,
+        }
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> $ty<'a, 'b, T> {
+            pub fn null(jni_env: &'b jni::JNIEnv<'a>) -> $ty<'a, 'b, T> {
+                $ty {
+                    java_this: jni::objects::AutoLocal::new(jni_env, jni::objects::JObject::null()),
+                    jni_env,
+                    phantom: PhantomData,
+                }
+            }
+        }
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> crate::JValueNonScalar for $ty<'a, 'b, T> {}
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> jni_boilerplate_helper::JavaClassNameFor
+            for $ty<'a, 'b, T>
+        {
+            fn java_class_name() -> &'static str {
+                $java_class_slash
+            }
+        }
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> crate::JavaConstructible<'a, 'b>
+            for $ty<'a, 'b, T>
+        {
+            fn wrap_jobject(
+                jni_env: &'b jni::JNIEnv<'a>,
+                java_this: jni::objects::AutoLocal<'a, 'b>,
+            ) -> Self {
+                $ty {
+                    java_this,
+                    jni_env,
+                    phantom: PhantomData,
+                }
+            }
+        }
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> crate::JavaSignatureFor for $ty<'a, 'b, T> {
+            fn signature_for() -> String {
+                String::from(concat!("L", $java_class_slash, ";"))
+            }
+        }
+
+        impl<'a, 'b, T: ConvertJValueToRust<'a, 'b>> crate::JavaSignatureFor for &$ty<'a, 'b, T> {
+            fn signature_for() -> String {
+                String::from(concat!("L", $java_class_slash, ";"))
+            }
+        }
+
+        impl<'a: 'b, 'b, T: ConvertJValueToRust<'a, 'b>> crate::ConvertRustToJValue<'a, 'b>
+            for &$ty<'a, 'b, T>
+        {
+            type T = jni::sys::jobject;
+            fn into_temporary(
+                self,
+                _je: &'b jni::JNIEnv<'a>,
+            ) -> Result<jni::sys::jobject, jni::errors::Error> {
+                Ok(*self.java_this.as_obj())
+            }
+
+            fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
+                jni::objects::JValue::from(*tmp)
+            }
+        }
+
+        impl<'a: 'b, 'b, T: ConvertJValueToRust<'a, 'b>> crate::ConvertRustToJValue<'a, 'b>
+            for $ty<'a, 'b, T>
+        {
+            type T = jni::sys::jobject;
+            fn into_temporary(
+                self,
+                _je: &'b jni::JNIEnv<'a>,
+            ) -> Result<jni::sys::jobject, jni::errors::Error> {
+                Ok(*self.java_this.as_obj())
+            }
+
+            fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
+                jni::objects::JValue::from(*tmp)
+            }
+        }
+
+        impl<'a: 'b, 'b, T: ConvertJValueToRust<'a, 'b>> crate::ConvertJValueToRust<'a, 'b>
+            for $ty<'a, 'b, T>
+        {
+            fn to_rust(
+                jni_env: &'b jni::JNIEnv<'a>,
+                val: &jni::objects::JValue<'a>,
+            ) -> Result<Self, jni::errors::Error> {
+                Ok($ty {
+                    java_this: jni::objects::AutoLocal::new(jni_env, val.l()?),
+                    jni_env,
+                    phantom: PhantomData,
+                })
+            }
+        }
+    };
+}
+
 //
 
 /*
