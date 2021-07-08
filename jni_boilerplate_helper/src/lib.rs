@@ -326,7 +326,7 @@ impl ConvertJValueToRust<'_, '_> for Vec<i16> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
         je.exception_check()?;
-        let mut rval = vec![0 as i16; count as usize];
+        let mut rval = vec![0_i16; count as usize];
         let slice: &mut [i16] = &mut rval;
         je.get_short_array_region(*object, 0, slice)?;
         je.exception_check()?;
@@ -342,7 +342,7 @@ impl ConvertJValueToRust<'_, '_> for Vec<i32> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
         je.exception_check()?;
-        let mut rval = vec![0 as i32; count as usize];
+        let mut rval = vec![0_i32; count as usize];
         let slice: &mut [i32] = &mut rval;
         je.get_int_array_region(*object, 0, slice)?;
         je.exception_check()?;
@@ -358,7 +358,7 @@ impl ConvertJValueToRust<'_, '_> for Vec<i64> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
         je.exception_check()?;
-        let mut rval = vec![0 as i64; count as usize];
+        let mut rval = vec![0_i64; count as usize];
         let slice: &mut [i64] = &mut rval;
         je.get_long_array_region(*object, 0, slice)?;
         je.exception_check()?;
