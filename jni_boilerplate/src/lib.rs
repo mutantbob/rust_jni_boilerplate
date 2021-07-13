@@ -125,6 +125,9 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust};
 
+#[cfg(debug_assertions)]
+        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
+
         #(#decl)*
 
         let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type as JavaSignatureFor>::signature_for();
@@ -207,6 +210,9 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust};
+
+#[cfg(debug_assertions)]
+        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
         #(#decl)*
 
@@ -315,6 +321,10 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     {
             use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                          ConvertJValueToRust, JClassWrapper, JavaConstructible};
+
+#[cfg(debug_assertions)]
+        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* ] );
+
         //struct AssertReturnJC<'a> where Self:JavaConstructible<'a> { phantom: &'a PhantomData<u8>};
             let cls = jni_env.find_class(#class_name)?;
             let cls = JClassWrapper {
@@ -432,6 +442,9 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust,JClassWrapper,JavaClassNameFor};
+
+#[cfg(debug_assertions)]
+        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
         let cls = jni_env.find_class(&<Self>::java_class_name())?;
         let cls = JClassWrapper {
@@ -670,7 +683,12 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
 
     let java_type = match macro_args.java_type {
         None => {
-            quote! { <#rust_type as JavaSignatureFor>::signature_for() }
+            quote! {
+            {
+#[cfg(debug_assertions)]
+            jni_boilerplate_helper::panic_if_bad_sigs( &[ <#rust_type as JavaSignatureFor>::signature_for() ] );
+
+            <#rust_type as JavaSignatureFor>::signature_for()} }
         }
         Some(ty) => {
             let ty = format!("L{};", ty);

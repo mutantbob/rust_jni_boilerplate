@@ -1089,6 +1089,17 @@ macro_rules! jni_wrapper_cliche_impl_T {
 
 //
 
+pub fn panic_if_bad_sigs(sigs: &[String]) {
+    for sig in sigs {
+        if sig.contains('.') {
+            panic!(
+                "bad class signature {} contains a . (should probably be /, maybe $)",
+                sig
+            );
+        }
+    }
+}
+
 /*
 pub fn function_argument_declaration_text(inputs: &[String]) -> String {
     let mut rval = String::new();
