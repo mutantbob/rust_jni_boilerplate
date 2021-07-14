@@ -557,6 +557,33 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b> for bool {
     }
 }
 
+macro_rules! impl_convert_rust_vec_to_jvalue {
+( $($t:ty ), *) => {
+$(
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &Vec<$t> {
+    type T = AutoLocal<'a, 'b>;
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
+        <&[$t] as ConvertRustToJValue>::into_temporary(&self, je) // delegate to the slice
+    }
+    fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for Vec<$t> {
+     type T = AutoLocal<'a, 'b>;
+     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
+         <&[$t] as ConvertRustToJValue>::into_temporary(&self, je) // delegate to the slice
+     }
+     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
+         JValue::from(tmp.as_obj())
+     }
+ }
+ )*
+};
+}
+
+impl_convert_rust_vec_to_jvalue! {bool, char, u8, i8, i16, i32, i64, f32, f64 }
+
 impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[bool] {
     type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
