@@ -402,6 +402,11 @@ fn simple_identifier(name: &str) -> Ident {
     Ident::new(&name, Span::call_site().into())
 }
 
+/// example:
+/// ```
+/// jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a, 'b> }
+/// jni_static_method! { 'a, 'b, rust_name=java_name(&str, i32) -> DogWrapper<'a, 'b> }
+/// ```
 #[proc_macro]
 pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as StaticMethodArgs);
