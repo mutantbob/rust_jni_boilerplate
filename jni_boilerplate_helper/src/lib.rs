@@ -846,7 +846,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
     }
 }
 
-impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for Vec<T>
+impl<'a: 'b, 'b, T> ConvertRustToJValue<'a, 'b> for Vec<T>
 where
     T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>> + JavaSignatureFor + JValueNonScalar,
 {
@@ -868,7 +868,7 @@ where
     }
 }
 
-impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for &[T]
+impl<'a: 'b, 'b, T> ConvertRustToJValue<'a, 'b> for &[T]
 where
     T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>>
         + JavaSignatureFor
