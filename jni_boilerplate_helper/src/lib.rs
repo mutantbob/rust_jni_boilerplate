@@ -1,4 +1,4 @@
-extern crate jni;
+#![allow(clippy::wrong_self_convention)]
 
 use log::debug;
 
@@ -11,9 +11,6 @@ use jni::sys::{
     jshortArray, jsize,
 };
 use jni::JNIEnv;
-// use std::any::Any;
-//use std::fmt::Write;
-// use syn::{GenericArgument, PathArguments, ReturnType, Type, TypeTuple};
 
 mod array_copy_back;
 mod java_runtime_wrappers;
@@ -248,6 +245,7 @@ impl ConvertJValueToRust<'_, '_> for Vec<bool> {
         let object: JObject = val.l()?;
         let count: jsize = je.get_array_length(*object)?;
         je.exception_check()?;
+        #[allow(clippy::unnecessary_cast)]
         let mut rval = vec![0 as jboolean; count as usize];
         let slice: &mut [jboolean] = &mut rval;
         je.get_boolean_array_region(*object, 0, slice)?;
