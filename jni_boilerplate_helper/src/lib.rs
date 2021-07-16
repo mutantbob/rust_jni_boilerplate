@@ -555,13 +555,15 @@ impl<'a, 'b> ConvertRustToJValue<'a, 'b> for bool {
     }
 }
 
+/// I would like to get rid of these, but I haven't figured out exactly how to
+/// generically delegate from something to a &'c[T] without rust becoming confused
 macro_rules! impl_convert_rust_vec_to_jvalue {
 ( $($t:ty ), *) => {
 $(
 impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &Vec<$t> {
     type T = AutoLocal<'a, 'b>;
-    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
-        <&[$t] as ConvertRustToJValue>::into_temporary(&self, je) // delegate to the slice
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, jni::errors::Error> {
+        <&[$t] as ConvertRustToJValue>::into_temporary(self, je) // delegate to the slice
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -569,7 +571,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &Vec<$t> {
 }
  impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for Vec<$t> {
      type T = AutoLocal<'a, 'b>;
-     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
+     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, jni::errors::Error> {
          <&[$t] as ConvertRustToJValue>::into_temporary(&self, je) // delegate to the slice
      }
      fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
@@ -844,19 +846,20 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
     }
 }
 
-impl<'a: 'b, 'b, T> ConvertRustToJValue<'a, 'b> for Vec<T>
+impl<'a: 'b, 'b, S> ConvertRustToJValue<'a, 'b> for Vec<S>
 where
-    T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>> + JavaSignatureFor + JValueNonScalar,
+    S: ConvertRustToJValue<'a, 'b> + JavaSignatureFor + JValueNonScalar,
 {
     type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
-        let cls = je.find_class(T::signature_for())?;
+        let cls = je.find_class(S::signature_for())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.into_iter().enumerate() {
-            let x: AutoLocal<'a, 'b> = val.into_temporary(je)?;
-            let x: JObject = x.as_obj();
-            je.set_object_array_element(rval, i as i32, x)?;
+            let tmp: <S as ConvertRustToJValue>::T =
+                <S as ConvertRustToJValue>::into_temporary(val, je)?;
+            let object = <S as ConvertRustToJValue>::temporary_into_jvalue(&tmp).l()?;
+            je.set_object_array_element(rval, i as i32, object)?;
         }
         Ok(AutoLocal::new(je, JObject::from(rval)))
     }
@@ -866,12 +869,11 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T> ConvertRustToJValue<'a, 'b> for &[T]
+impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for &Vec<T>
 where
-    T: ConvertRustToJValue<'a, 'b, T = AutoLocal<'a, 'b>>
-        + JavaSignatureFor
-        + JValueNonScalar
-        + Copy,
+    &'c T: ConvertRustToJValue<'a, 'b>,
+    T: JavaSignatureFor + JValueNonScalar,
+    Self: 'c,
 {
     type T = AutoLocal<'a, 'b>;
 
@@ -879,9 +881,10 @@ where
         let cls = je.find_class(T::signature_for())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.iter().enumerate() {
-            let x: AutoLocal<'a, 'b> = val.into_temporary(je)?;
-            let x: JObject = x.as_obj();
-            je.set_object_array_element(rval, i as i32, x)?;
+            let tmp: <&'c T as ConvertRustToJValue>::T =
+                <&'c T as ConvertRustToJValue>::into_temporary(val, je)?;
+            let object = <&'c T as ConvertRustToJValue>::temporary_into_jvalue(&tmp).l()?;
+            je.set_object_array_element(rval, i as i32, object)?;
         }
         Ok(AutoLocal::new(je, JObject::from(rval)))
     }
@@ -891,8 +894,107 @@ where
     }
 }
 
-//
+/*impl<'a: 'b, 'b, 'c, S> ConvertRustToJValue<'a, 'b> for Vec<S>
+where
+    &'c[S]: ConvertRustToJValue<'a,'b>,
+    Self: 'c,
+{
+    type T = <&'c[S] as ConvertRustToJValue<'a,'b>>::T;
 
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let x :&'c[S] = &arg;
+        <&[S] as ConvertRustToJValue>::into_temporary(&self, je)
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        <&[S] as ConvertRustToJValue>::temporary_into_jvalue(tmp)
+    }
+}
+
+impl<'a: 'b, 'b, 'c, S> ConvertRustToJValue<'a, 'b> for &'c Vec<S>
+where
+    &'c[S]: ConvertRustToJValue<'a,'b>,
+    //Self: 'c,
+{
+    type T = <&'c[S] as ConvertRustToJValue<'a,'b>>::T;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        <&'c[S] as ConvertRustToJValue>::into_temporary(&self, je)
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        <&'c[S] as ConvertRustToJValue>::temporary_into_jvalue(tmp)
+    }
+}
+*/
+
+/*
+impl<'a: 'b, 'b, S> ConvertRustToJValue<'a, 'b> for &[S]
+where
+    S: ConvertRustToJValue<'a, 'b>,
+    S: JavaSignatureFor + JValueNonScalar+Copy,
+{
+    type T = AutoLocal<'a, 'b>;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let cls = je.find_class(S::signature_for())?;
+        let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        for (i, val) in self.iter().enumerate() {
+            let tmp: <S as ConvertRustToJValue>::T = <S as ConvertRustToJValue>::into_temporary(*val, je)?;
+            let t2 = <S as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
+            je.set_object_array_element(rval, i as i32, t2.l()?)?;
+        }
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+*/
+
+impl<'a: 'b, 'b, 'c, S> ConvertRustToJValue<'a, 'b> for &[S]
+where
+    &'c S: ConvertRustToJValue<'a, 'b>,
+    S: JavaSignatureFor + JValueNonScalar, // I need JValueNonScalar to void conflicting with &[i8] and friends
+    Self: 'c,
+{
+    type T = AutoLocal<'a, 'b>;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let cls = je.find_class(S::signature_for())?;
+        let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        for (i, val) in self.iter().enumerate() {
+            let tmp: <&'c S as ConvertRustToJValue>::T =
+                <&'c S as ConvertRustToJValue>::into_temporary(val, je)?;
+            let t2 = <&'c S as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
+            je.set_object_array_element(rval, i as i32, t2.l()?)?;
+        }
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+
+/// I need this because of how `<&[&[i8]] as ConvertRustToJValue>` depends on <&&[i8] as ConvertRustToJValue>
+impl<'a: 'b, 'b, 'c, S> ConvertRustToJValue<'a, 'b> for &&'c [S]
+where
+    &'c [S]: ConvertRustToJValue<'a, 'b>,
+{
+    type T = <&'c [S] as ConvertRustToJValue<'a, 'b>>::T;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        <&'c [S] as ConvertRustToJValue>::into_temporary(*self, je)
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        <&'c [S] as ConvertRustToJValue>::temporary_into_jvalue(tmp)
+    }
+}
+
+//
 //
 
 pub trait JavaConstructible<'a, 'b> {
