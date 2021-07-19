@@ -502,8 +502,13 @@ fn initializations_for_parameter_temporaries(
             let tmp_i = &metadata.tmp_ident;
             let p_i = &metadata.p_ident;
             let cr2j = cr2j_for(ty);
+            let arg = if is_mut_ref(ty) {
+                quote! { #p_i }
+            } else {
+                quote! { & #p_i }
+            };
 
-            quote! {let #tmp_i = <#ty as #cr2j>::into_temporary(#p_i, #jni_env_ident)?;}
+            quote! {let #tmp_i = <#ty as #cr2j>::into_temporary(#arg, #jni_env_ident)?;}
         })
         .collect()
 }
@@ -677,10 +682,10 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     pub fn #setter(&self, new_val: #rust_type) -> Result<(), jni::errors::Error>
     {
     use jni_boilerplate_helper::{ConvertRustToJValue,JavaSignatureFor};
-    let tmp = ConvertRustToJValue::into_temporary(new_val, self.jni_env)?;
+    let tmp = <#rust_type as ConvertRustToJValue>::into_temporary(&new_val, self.jni_env)?;
     self.jni_env.set_field(self.java_this.as_obj(), #java_name,
     #java_type,
-    <&#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp))
+    <#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp))
     }
     };
 
