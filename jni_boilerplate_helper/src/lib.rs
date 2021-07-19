@@ -179,9 +179,7 @@ impl ConvertJValueToRust<'_, '_> for bool {
 impl ConvertJValueToRust<'_, '_> for char {
     fn to_rust(_je: &JNIEnv, val: JValue) -> Result<Self, jni::errors::Error> {
         val.c().and_then(|c| match std::char::from_u32(c as u32) {
-            None => Err(jni::errors::Error::from_kind(
-                jni::errors::ErrorKind::JavaException,
-            )),
+            None => Err(jni::errors::Error::JavaException),
             Some(ch) => Ok(ch),
         })
     }
@@ -263,9 +261,7 @@ pub fn u32_to_char(val: u32) -> Result<char, jni::errors::Error> {
     if let Some(ch) = std::char::from_u32(val) {
         Ok(ch)
     } else {
-        Err(jni::errors::Error::from_kind(
-            jni::errors::ErrorKind::JavaException,
-        ))
+        Err(jni::errors::Error::JavaException)
     }
 }
 
