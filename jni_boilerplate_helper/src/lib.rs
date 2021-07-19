@@ -508,6 +508,13 @@ pub trait ConvertRustToJValue<'a, 'b> {
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a>;
 }
 
+pub trait ConvertMutableRustToJValue<'a, 'b> {
+    type T;
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, jni::errors::Error>;
+    // tmp is borrowed, so that the value doesn't get dropped before the temporary is used.
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a>;
+}
+
 #[macro_export]
 macro_rules! impl_convert_rust_to_jvalue {
     ( $($t:ty),* ) => {
@@ -690,7 +697,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i32] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i32] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [i32] {
     type T = ArrayCopyBackInt<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -755,7 +762,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[f64] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [bool] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [bool] {
     type T = ArrayCopyBackBool<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -768,7 +775,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [bool] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [char] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [char] {
     type T = ArrayCopyBackChar<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -781,7 +788,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [char] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [i16] {
     type T = ArrayCopyBackShort<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -794,7 +801,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i16] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [i8] {
     type T = ArrayCopyBackByte<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -807,7 +814,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i8] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [i64] {
     type T = ArrayCopyBackLong<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -820,7 +827,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [i64] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [f32] {
     type T = ArrayCopyBackFloat<'a, 'b, 'c>;
     fn into_temporary(
         self,
@@ -833,7 +840,7 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f32] {
     }
 }
 
-impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
+impl<'a: 'b, 'b, 'c> ConvertMutableRustToJValue<'a, 'b> for &'c mut [f64] {
     type T = ArrayCopyBackDouble<'a, 'b, 'c>;
     fn into_temporary(
         self,

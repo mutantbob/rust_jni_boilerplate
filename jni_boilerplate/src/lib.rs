@@ -112,26 +112,26 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    #[allow(non_snake_case)]
-    pub fn #rust_name(&self, #arg_sig) -> Result<#return_type, jni::errors::Error>
-    {
-        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                     ConvertJValueToRust};
+        #[allow(non_snake_case)]
+        pub fn #rust_name(&self, #arg_sig) -> Result<#return_type, jni::errors::Error>
+        {
+            use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
+                                         ConvertJValueToRust};
 
-#[cfg(debug_assertions)]
-        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
+    #[cfg(debug_assertions)]
+            jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
-        #(#decl)*
+            #(#decl)*
 
-        let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type as JavaSignatureFor>::signature_for();
+            let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type as JavaSignatureFor>::signature_for();
 
-        let results =
-            self.jni_env.call_method(self.java_this.as_obj(), #java_name, sig,
-                                     &[#(#jvalue_param_array),*])?;
+            let results =
+                self.jni_env.call_method(self.java_this.as_obj(), #java_name, sig,
+                                         &[#(#jvalue_param_array),*])?;
 
-        <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, results)
-    }
-            };
+            <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, results)
+        }
+                };
 
     body.into()
 }
@@ -197,25 +197,25 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    #[allow(non_snake_case)]
-    pub fn #rust_name(jni_env:&#lifetime_b jni::JNIEnv<#lifetime_a>, java_this: &jni::objects::JObject<#lifetime_a>, #arg_sig) -> Result<#return_type, jni::errors::Error>
-    {
-        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                     ConvertJValueToRust};
+        #[allow(non_snake_case)]
+        pub fn #rust_name(jni_env:&#lifetime_b jni::JNIEnv<#lifetime_a>, java_this: &jni::objects::JObject<#lifetime_a>, #arg_sig) -> Result<#return_type, jni::errors::Error>
+        {
+            use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
+                                         ConvertJValueToRust};
 
-#[cfg(debug_assertions)]
-        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
+    #[cfg(debug_assertions)]
+            jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
-        #(#decl)*
+            #(#decl)*
 
-        let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type>::signature_for();
+            let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type>::signature_for();
 
-        let results =
-            jni_env.call_method(*java_this, #java_name, sig,
-                                     &[#(#jvalue_param_array),*])?;
-        <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
-    }
-            };
+            let results =
+                jni_env.call_method(*java_this, #java_name, sig,
+                                         &[#(#jvalue_param_array),*])?;
+            <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
+        }
+                };
 
     body.into()
 }
@@ -307,33 +307,33 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    #[allow(non_snake_case)]
-    pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig)
-    -> Result<Self, jni::errors::Error>
-    {
-            use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                         ConvertJValueToRust, JClassWrapper, JavaConstructible};
+        #[allow(non_snake_case)]
+        pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig)
+        -> Result<Self, jni::errors::Error>
+        {
+                use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
+                                             ConvertJValueToRust, JClassWrapper, JavaConstructible};
 
-#[cfg(debug_assertions)]
-        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* ] );
+    #[cfg(debug_assertions)]
+            jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* ] );
 
-        //struct AssertReturnJC<'a> where Self:JavaConstructible<'a> { phantom: &'a PhantomData<u8>};
-            let cls = jni_env.find_class(#class_name)?;
-            let cls = JClassWrapper {
-                jni_env,
-                cls,
+            //struct AssertReturnJC<'a> where Self:JavaConstructible<'a> { phantom: &'a PhantomData<u8>};
+                let cls = jni_env.find_class(#class_name)?;
+                let cls = JClassWrapper {
+                    jni_env,
+                    cls,
+                };
+
+                #(#decl)*
+
+                let sig = String::from("(")#(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")V";
+
+                let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])?;
+                jni_env.exception_check()?;
+
+                Ok(<Self as JavaConstructible>::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
+        }
             };
-
-            #(#decl)*
-
-            let sig = String::from("(")#(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")V";
-
-            let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])?;
-            jni_env.exception_check()?;
-
-            Ok(<Self as JavaConstructible>::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
-    }
-        };
 
     body.into()
 }
@@ -434,31 +434,31 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
     let jvalue_param_array: Vec<proc_macro2::TokenStream> = value_parameter_array(&args_metadata);
 
     let body = quote! {
-    #[allow(non_snake_case)]
-    pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
-    {
-        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
-                                     ConvertJValueToRust,JClassWrapper,JavaClassNameFor};
+        #[allow(non_snake_case)]
+        pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
+        {
+            use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
+                                         ConvertJValueToRust,JClassWrapper,JavaClassNameFor};
 
-#[cfg(debug_assertions)]
-        jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
+    #[cfg(debug_assertions)]
+            jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
-        let cls = jni_env.find_class(&<Self>::java_class_name())?;
-        let cls = JClassWrapper {
-            jni_env: &jni_env,
-            cls,
+            let cls = jni_env.find_class(&<Self>::java_class_name())?;
+            let cls = JClassWrapper {
+                jni_env: &jni_env,
+                cls,
+            };
+            jni_env.exception_check()?;
+
+            #(#decl)*
+            let sig = String::from("(")+#(&<#arg_types as JavaSignatureFor>::signature_for() +)*  ")"+&<#return_type as JavaSignatureFor>::signature_for();
+
+            let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
+            jni_env.exception_check()?;
+
+            <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
+        }
         };
-        jni_env.exception_check()?;
-
-        #(#decl)*
-        let sig = String::from("(")+#(&<#arg_types as JavaSignatureFor>::signature_for() +)*  ")"+&<#return_type as JavaSignatureFor>::signature_for();
-
-        let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])?;
-        jni_env.exception_check()?;
-
-        <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
-    }
-    };
 
     body.into()
 }
@@ -485,7 +485,8 @@ fn value_parameter_array(args_metadata: &[AllAboutArg]) -> Vec<proc_macro2::Toke
         .map(|metadata| {
             let ty = &metadata.a_type;
             let tmp_i = &metadata.tmp_ident;
-            quote! { <#ty as ConvertRustToJValue>::temporary_into_jvalue(&#tmp_i) }
+            let cr2j = cr2j_for(ty);
+            quote! { <#ty as #cr2j>::temporary_into_jvalue(&#tmp_i) }
         })
         .collect()
 }
@@ -497,11 +498,29 @@ fn initializations_for_parameter_temporaries(
     args_metadata
         .iter()
         .map(|metadata| {
+            let ty = &metadata.a_type;
             let tmp_i = &metadata.tmp_ident;
             let p_i = &metadata.p_ident;
-            quote! {let #tmp_i = ConvertRustToJValue::into_temporary(#p_i, #jni_env_ident)?;}
+            let cr2j = cr2j_for(ty);
+
+            quote! {let #tmp_i = <#ty as #cr2j>::into_temporary(#p_i, #jni_env_ident)?;}
         })
         .collect()
+}
+
+fn cr2j_for(a_type: &Type) -> proc_macro2::TokenStream {
+    if is_mut_ref(a_type) {
+        quote! {ConvertMutableRustToJValue}
+    } else {
+        quote! {ConvertRustToJValue}
+    }
+}
+
+fn is_mut_ref(a_type: &Type) -> bool {
+    match a_type {
+        Type::Reference(nest) => nest.mutability.is_some(),
+        _ => false,
+    }
 }
 
 /*
@@ -632,11 +651,11 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     let java_type = match macro_args.java_type {
         None => {
             quote! {
-            {
-#[cfg(debug_assertions)]
-            jni_boilerplate_helper::panic_if_bad_sigs( &[ <#rust_type as JavaSignatureFor>::signature_for() ] );
+                        {
+            #[cfg(debug_assertions)]
+                        jni_boilerplate_helper::panic_if_bad_sigs( &[ <#rust_type as JavaSignatureFor>::signature_for() ] );
 
-            <#rust_type as JavaSignatureFor>::signature_for()} }
+                        <#rust_type as JavaSignatureFor>::signature_for()} }
         }
         Some(ty) => {
             let ty = format!("L{};", ty);
