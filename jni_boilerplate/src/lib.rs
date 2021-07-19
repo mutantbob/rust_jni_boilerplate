@@ -404,8 +404,13 @@ fn simple_identifier(name: &str) -> Ident {
 
 /// example:
 /// ```
-/// jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a, 'b> }
-/// jni_static_method! { 'a, 'b, rust_name=java_name(&str, i32) -> DogWrapper<'a, 'b> }
+/// use jni_boilerplate::jni_static_method;
+/// use jni_boilerplate_helper::jni_wrapper_cliche_impl;
+/// jni_wrapper_cliche_impl!{ DogWrapper, "com/example/Dog" }
+/// impl<'a:'b, 'b> DogWrapper<'a, 'b> {
+///     jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a, 'b> }
+///     jni_static_method! { 'a, 'b, rust_name=java_name(&str, i32) -> DogWrapper<'a, 'b> }
+/// }
 /// ```
 #[proc_macro]
 pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
@@ -706,25 +711,17 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
 
 #[cfg(test)]
 mod test {
-    use super::harvest_lifetimes_type;
-    use proc_macro2::TokenStream;
+    use crate::is_mut_ref;
     use syn::Type;
 
     #[test]
     fn test1() -> Result<(), syn::Error> {
-        let tokens: TokenStream = quote! {
-        Radical<'a, 'd'>
-                };
+        let a: Type = parse_quote! { Vec<i32> };
 
-        let rtype: Type = parse_quote! {
-        Radical<'a, 'd>
-        };
+        let b: Type = parse_quote! { &mut [i32] };
 
-        let lifetimes = harvest_lifetimes_type(&rtype);
-
-        for lt in lifetimes {
-            println!("{:#?}", lt.ident);
-        }
+        assert_eq!(false, is_mut_ref(&a));
+        assert_eq!(true, is_mut_ref(&b));
 
         Ok(())
     }

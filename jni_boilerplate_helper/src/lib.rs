@@ -1024,7 +1024,7 @@ pub trait JavaConstructible<'a, 'b> {
 ///
 /// usage:
 ///
-/// ` jni_wrapper_cliche! { rust_type_name, "package/path/to/java/class" }`
+/// ` jni_wrapper_cliche_impl! { rust_type_name, "package/path/to/java/class" }`
 ///
 #[macro_export]
 macro_rules! jni_wrapper_cliche_impl {
