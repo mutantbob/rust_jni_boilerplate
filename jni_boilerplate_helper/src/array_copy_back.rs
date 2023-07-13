@@ -1,5 +1,5 @@
-use crate::{jni, u32_to_char};
-use jni::objects::{JObject, JValue};
+use crate::{jni, u32_to_char, wrap_jobject};
+use jni::objects::JValue;
 use jni::sys::{
     jboolean, jbooleanArray, jbyteArray, jchar, jcharArray, jdoubleArray, jfloatArray, jintArray,
     jlongArray, jshortArray, jsize,
@@ -26,7 +26,7 @@ impl<'a, 'b, 'c> ArrayCopyBackBool<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -56,7 +56,7 @@ pub fn move_jbooleanarray_to_bool_array(je: &JNIEnv, src: jbooleanArray, dst: &m
     for (i, x) in tmp.iter().enumerate() {
         dst[i] = 0 != *x;
     }
-    je.delete_local_ref(JObject::from(src))
+    je.delete_local_ref(wrap_jobject(src))
         .expect("how did delete_local_ref() fail?");
 }
 
@@ -79,7 +79,7 @@ impl<'a, 'b, 'c> ArrayCopyBackChar<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -117,7 +117,7 @@ pub fn move_jchararray_to_char_array(
     for (i, x) in tmp.iter().enumerate() {
         dst[i] = u32_to_char(*x as u32)?;
     }
-    je.delete_local_ref(JObject::from(src))
+    je.delete_local_ref(wrap_jobject(src))
 }
 
 //
@@ -139,7 +139,7 @@ impl<'a, 'b, 'c> ArrayCopyBackInt<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -149,7 +149,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackInt<'a, 'b, 'c> {
             .get_int_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -173,7 +173,7 @@ impl<'a, 'b, 'c> ArrayCopyBackShort<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -183,7 +183,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackShort<'a, 'b, 'c> {
             .get_short_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -208,7 +208,7 @@ impl<'a, 'b, 'c> ArrayCopyBackByte<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -219,7 +219,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackByte<'a, 'b, 'c> {
             .get_byte_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -244,7 +244,7 @@ impl<'a, 'b, 'c> ArrayCopyBackLong<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -255,7 +255,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackLong<'a, 'b, 'c> {
             .get_long_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -280,7 +280,7 @@ impl<'a, 'b, 'c> ArrayCopyBackFloat<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -291,7 +291,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackFloat<'a, 'b, 'c> {
             .get_float_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -316,7 +316,7 @@ impl<'a, 'b, 'c> ArrayCopyBackDouble<'a, 'b, 'c> {
     }
 
     pub fn as_jvalue(&self) -> JValue<'a> {
-        JValue::from(self.array)
+        JValue::from(wrap_jobject(self.array))
     }
 }
 
@@ -327,7 +327,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackDouble<'a, 'b, 'c> {
             .get_double_array_region(self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(JObject::from(self.array))
+            .delete_local_ref(wrap_jobject(self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }

@@ -4,7 +4,9 @@ use log::debug;
 
 #[cfg(feature = "jni_0_18")]
 use jni_018plus as jni;
-#[cfg(not(feature = "jni_0_18"))]
+#[cfg(feature = "jni_0_20")]
+use jni_020plus as jni;
+#[cfg(not(any(feature = "jni_0_18", feature = "jni_0_20")))]
 use jni_old as jni;
 
 use crate::array_copy_back::*;
@@ -13,8 +15,8 @@ use java_runtime_wrappers::Throwable;
 use jni::errors::Error;
 use jni::objects::{AutoLocal, JClass, JObject, JValue};
 use jni::sys::{
-    jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jobjectArray,
-    jshortArray, jsize,
+    jboolean, jbooleanArray, jdoubleArray, jfloatArray, jintArray, jlongArray, jobject,
+    jobjectArray, jshortArray, jsize,
 };
 use jni::JNIEnv;
 
@@ -191,12 +193,12 @@ impl ConvertJValueToRust<'_, '_> for char {
     }
 }
 
-#[cfg(feature = "jni_0_18")]
+#[cfg(any(feature = "jni_0_18", feature = "jni_0_20"))]
 pub fn java_exception() -> Error {
     jni::errors::Error::JavaException
 }
 
-#[cfg(not(feature = "jni_0_18"))]
+#[cfg(not(any(feature = "jni_0_18", feature = "jni_0_20")))]
 pub fn java_exception() -> Error {
     jni::errors::Error::from_kind(jni::errors::ErrorKind::JavaException)
 }
@@ -600,11 +602,21 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[bool] {
     type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval: jbooleanArray = copy_bool_array_to_jbooleanarray(je, self)?;
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
     }
+}
+
+#[cfg(not(feature = "jni_0_20"))]
+fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
+    JObject::from(rval)
+}
+
+#[cfg(feature = "jni_0_20")]
+fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
+    unsafe { JObject::from_raw(rval) }
 }
 
 impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[char] {
@@ -612,7 +624,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[char] {
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = copy_char_array_to_jchararray(je, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -624,7 +636,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i8] {
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let shenanigans = unsafe { &*(self as *const [i8] as *const [u8]) };
         let rval = je.byte_array_from_slice(shenanigans)?;
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -635,7 +647,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[u8] {
     type T = AutoLocal<'a, 'b>;
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<AutoLocal<'a, 'b>, jni::errors::Error> {
         let rval = je.byte_array_from_slice(self)?;
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -695,7 +707,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i32] {
         let rval: jintArray = je.new_int_array(self.len() as jsize)?;
         je.set_int_array_region(rval, 0, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -721,7 +733,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i16] {
         let rval: jshortArray = je.new_short_array(self.len() as jsize)?;
         je.set_short_array_region(rval, 0, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -734,7 +746,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[i64] {
         let rval: jlongArray = je.new_long_array(self.len() as jsize)?;
         je.set_long_array_region(rval, 0, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -747,7 +759,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[f32] {
         let rval: jfloatArray = je.new_float_array(self.len() as jsize)?;
         je.set_float_array_region(rval, 0, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -760,7 +772,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[f64] {
         let rval: jdoubleArray = je.new_double_array(self.len() as jsize)?;
         je.set_double_array_region(rval, 0, self)?;
 
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
     fn temporary_into_jvalue(tmp: &AutoLocal<'a, 'b>) -> JValue<'a> {
         JValue::from(tmp.as_obj())
@@ -873,7 +885,7 @@ where
             let object = <S as ConvertRustToJValue>::temporary_into_jvalue(&tmp).l()?;
             je.set_object_array_element(rval, i as i32, object)?;
         }
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
 
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
@@ -898,7 +910,7 @@ where
             let object = <&'c T as ConvertRustToJValue>::temporary_into_jvalue(&tmp).l()?;
             je.set_object_array_element(rval, i as i32, object)?;
         }
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
 
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
@@ -956,7 +968,7 @@ where
             let t2 = <S as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
             je.set_object_array_element(rval, i as i32, t2.l()?)?;
         }
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
 
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
@@ -982,7 +994,7 @@ where
             let t2 = <&'c S as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
             je.set_object_array_element(rval, i as i32, t2.l()?)?;
         }
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
 
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
@@ -1020,7 +1032,7 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[&str] {
             let t2 = <&str as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
             je.set_object_array_element(rval, i as i32, t2.l()?)?;
         }
-        Ok(AutoLocal::new(je, JObject::from(rval)))
+        Ok(AutoLocal::new(je, wrap_jobject(rval)))
     }
 
     fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {

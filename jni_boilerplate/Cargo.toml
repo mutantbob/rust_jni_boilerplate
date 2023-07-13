@@ -8,6 +8,7 @@ edition = "2018"
 
 [features]
 jni_0_18 = ["jni_boilerplate_helper/jni_0_18"]
+jni_0_20 = ["jni_boilerplate_helper/jni_0_20"]
 
 [dependencies]
 syn = { version= "1.0.36", features = ["full"] }
