@@ -1006,6 +1006,28 @@ where
     }
 }
 
+/// I'm not entirely sure why the impl above doesn't match &[&str],
+/// and I'm in too much of a hurry to think it through.
+impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[&str] {
+    type T = AutoLocal<'a, 'b>;
+
+    fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
+        let cls = je.find_class(<&str as JavaClassNameFor>::java_class_name())?;
+        let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
+        for (i, val) in self.iter().enumerate() {
+            let tmp: <&str as ConvertRustToJValue>::T =
+                <&str as ConvertRustToJValue>::into_temporary(val, je)?;
+            let t2 = <&str as ConvertRustToJValue>::temporary_into_jvalue(&tmp);
+            je.set_object_array_element(rval, i as i32, t2.l()?)?;
+        }
+        Ok(AutoLocal::new(je, JObject::from(rval)))
+    }
+
+    fn temporary_into_jvalue(tmp: &Self::T) -> JValue<'a> {
+        JValue::from(tmp.as_obj())
+    }
+}
+
 //
 //
 
