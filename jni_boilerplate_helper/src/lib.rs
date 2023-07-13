@@ -9,6 +9,7 @@ use jni_old as jni;
 
 use crate::array_copy_back::*;
 use java_runtime_wrappers::class_is_array;
+use java_runtime_wrappers::Throwable;
 use jni::errors::Error;
 use jni::objects::{AutoLocal, JClass, JObject, JValue};
 use jni::sys::{
@@ -17,8 +18,8 @@ use jni::sys::{
 };
 use jni::JNIEnv;
 
-mod array_copy_back;
-mod java_runtime_wrappers;
+pub mod array_copy_back;
+pub mod java_runtime_wrappers;
 
 pub struct JClassWrapper<'a, 'b> {
     pub jni_env: &'a JNIEnv<'a>,
@@ -1010,6 +1011,52 @@ where
 
 pub trait JavaConstructible<'a, 'b> {
     fn wrap_jobject(jni_env: &'b JNIEnv<'a>, java_this: AutoLocal<'a, 'b>) -> Self;
+}
+
+//
+
+pub fn raise_if_exception(jni_env: &JNIEnv) -> Result<(), Error> {
+    match jni_env.exception_check() {
+        Ok(boom) => {
+            if boom {
+                if let Ok(throwable) = jni_env.exception_occurred() {
+                    jni_env.exception_clear()?;
+                    #[cfg(debug_assertions)]
+                    {
+                        let t2 =
+                            Throwable::wrap_jobject(jni_env, AutoLocal::new(jni_env, *throwable));
+                        let _ = t2.printStackTrace();
+                    }
+                } else {
+                    jni_env.exception_clear()?;
+                }
+                Err(java_exception())
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+//
+
+/// This trait only exists so I can chain calls off a Result.
+/// If the Result is an Err, and jni_env.exception_check() reports true, we will call jni_env.exception_clear()
+pub trait ClearIfErr<T> {
+    fn clear_if_err(self, jni_env: &JNIEnv) -> Result<T, Error>;
+}
+
+impl<T> ClearIfErr<T> for Result<T, Error> {
+    fn clear_if_err(self, jni_env: &JNIEnv) -> Result<T, Error> {
+        match self {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                raise_if_exception(jni_env)?;
+                Err(e)
+            }
+        }
+    }
 }
 
 //
