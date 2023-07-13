@@ -859,12 +859,12 @@ impl<'a: 'b, 'b, 'c> ConvertRustToJValue<'a, 'b> for &'c mut [f64] {
 
 impl<'a: 'b, 'b, S> ConvertRustToJValue<'a, 'b> for Vec<S>
 where
-    S: ConvertRustToJValue<'a, 'b> + JavaSignatureFor + JValueNonScalar,
+    S: ConvertRustToJValue<'a, 'b> + JavaClassNameFor + JValueNonScalar,
 {
     type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
-        let cls = je.find_class(S::signature_for())?;
+        let cls = je.find_class(S::java_class_name())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.into_iter().enumerate() {
             let tmp: <S as ConvertRustToJValue>::T =
@@ -883,13 +883,13 @@ where
 impl<'a: 'b, 'b, 'c, T> ConvertRustToJValue<'a, 'b> for &Vec<T>
 where
     &'c T: ConvertRustToJValue<'a, 'b>,
-    T: JavaSignatureFor + JValueNonScalar,
+    T: JavaClassNameFor + JValueNonScalar,
     Self: 'c,
 {
     type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
-        let cls = je.find_class(T::signature_for())?;
+        let cls = je.find_class(T::java_class_name())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.iter().enumerate() {
             let tmp: <&'c T as ConvertRustToJValue>::T =
@@ -948,7 +948,7 @@ where
     type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
-        let cls = je.find_class(S::signature_for())?;
+        let cls = je.find_class(S::java_class_name())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.iter().enumerate() {
             let tmp: <S as ConvertRustToJValue>::T = <S as ConvertRustToJValue>::into_temporary(*val, je)?;
@@ -967,13 +967,13 @@ where
 impl<'a: 'b, 'b, 'c, S> ConvertRustToJValue<'a, 'b> for &[S]
 where
     &'c S: ConvertRustToJValue<'a, 'b>,
-    S: JavaSignatureFor + JValueNonScalar, // I need JValueNonScalar to void conflicting with &[i8] and friends
+    S: JavaClassNameFor + JValueNonScalar, // I need JValueNonScalar to void conflicting with &[i8] and friends
     Self: 'c,
 {
     type T = AutoLocal<'a, 'b>;
 
     fn into_temporary(self, je: &'b JNIEnv<'a>) -> Result<Self::T, Error> {
-        let cls = je.find_class(S::signature_for())?;
+        let cls = je.find_class(S::java_class_name())?;
         let rval: jobjectArray = je.new_object_array(self.len() as i32, cls, JObject::null())?;
         for (i, val) in self.iter().enumerate() {
             let tmp: <&'c S as ConvertRustToJValue>::T =
