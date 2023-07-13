@@ -1,11 +1,15 @@
 [package]
 name = "jni_boilerplate_helper"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Robert Forsman <git@thoth.purplefrog.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+jni_0_18 = ["dep:jni_018plus"]
+
 [dependencies]
-jni = "0.17.0"
+jni_old = { version = "0.17.0", package="jni" }
+jni_018plus = { version = ">=0.18.0, <0.20.0" , package = "jni", optional=true}
 log = "*"

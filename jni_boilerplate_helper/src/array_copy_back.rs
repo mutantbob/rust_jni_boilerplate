@@ -1,4 +1,4 @@
-use crate::u32_to_char;
+use crate::{jni, u32_to_char};
 use jni::objects::{JObject, JValue};
 use jni::sys::{
     jboolean, jbooleanArray, jbyteArray, jchar, jcharArray, jdoubleArray, jfloatArray, jintArray,

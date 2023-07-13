@@ -1,5 +1,6 @@
-use jni::objects::JObject;
 /// This is just where I stash some helper functions for calling important stuff in the java runtime
+use crate::jni;
+use jni::objects::JObject;
 use jni::JNIEnv;
 
 /// class_object is an instance of java.lang.Class

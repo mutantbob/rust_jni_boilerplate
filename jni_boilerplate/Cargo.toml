@@ -1,13 +1,15 @@
 [package]
 name = "jni_boilerplate"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Robert Forsman <git@thoth.purplefrog.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+jni_0_18 = ["jni_boilerplate_helper/jni_0_18"]
+
 [dependencies]
-jni = "0.17.0"
 syn = { version= "1.0.36", features = ["full"] }
 quote = "1.0.7"
 proc-macro2 = "1.0.19"

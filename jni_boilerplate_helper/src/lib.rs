@@ -2,6 +2,11 @@
 
 use log::debug;
 
+#[cfg(feature = "jni_0_18")]
+use jni_018plus as jni;
+#[cfg(not(feature = "jni_0_18"))]
+use jni_old as jni;
+
 use crate::array_copy_back::*;
 use java_runtime_wrappers::class_is_array;
 use jni::errors::Error;
@@ -179,12 +184,20 @@ impl ConvertJValueToRust<'_, '_> for bool {
 impl ConvertJValueToRust<'_, '_> for char {
     fn to_rust(_je: &JNIEnv, val: JValue) -> Result<Self, jni::errors::Error> {
         val.c().and_then(|c| match std::char::from_u32(c as u32) {
-            None => Err(jni::errors::Error::from_kind(
-                jni::errors::ErrorKind::JavaException,
-            )),
+            None => Err(java_exception()),
             Some(ch) => Ok(ch),
         })
     }
+}
+
+#[cfg(feature = "jni_0_18")]
+pub fn java_exception() -> Error {
+    jni::errors::Error::JavaException
+}
+
+#[cfg(not(feature = "jni_0_18"))]
+pub fn java_exception() -> Error {
+    jni::errors::Error::from_kind(jni::errors::ErrorKind::JavaException)
 }
 
 impl ConvertJValueToRust<'_, '_> for i8 {
@@ -263,9 +276,7 @@ pub fn u32_to_char(val: u32) -> Result<char, jni::errors::Error> {
     if let Some(ch) = std::char::from_u32(val) {
         Ok(ch)
     } else {
-        Err(jni::errors::Error::from_kind(
-            jni::errors::ErrorKind::JavaException,
-        ))
+        Err(java_exception())
     }
 }
 
