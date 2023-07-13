@@ -6,6 +6,12 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+jni_0_18 = ["dep:jni_018plus"]
+jni_0_20 = ["dep:jni_020plus"]
+
 [dependencies]
-jni = "0.19"
+jni_old = { version = "0.17.0", package="jni" }
+jni_018plus = { version = ">=0.18.0, <0.20.0" , package = "jni", optional=true}
+jni_020plus = { version = ">=0.20.0, <0.21.0" , package = "jni", optional=true}
 log = "*"
