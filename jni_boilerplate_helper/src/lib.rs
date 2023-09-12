@@ -160,6 +160,18 @@ impl JavaClassNameFor for String {
     }
 }
 
+impl JavaClassNameFor for &[i8] {
+    fn java_class_name() -> &'static str {
+        "[B"
+    }
+}
+
+/*impl<T: JavaClassNameFor> JavaClassNameFor for &[T] {
+    fn java_class_name() -> &'static str {
+        format!("[{}", <T as JavaClassNameFor>::java_class_name())
+    }
+}*/
+
 //
 
 ///
