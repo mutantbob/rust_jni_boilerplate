@@ -629,12 +629,12 @@ impl<'a: 'b, 'b> ConvertRustToJValue<'a, 'b> for &[bool] {
 }
 
 #[cfg(not(feature = "jni_0_20"))]
-fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
+pub fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
     JObject::from(rval)
 }
 
 #[cfg(feature = "jni_0_20")]
-fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
+pub fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
     unsafe { JObject::from_raw(rval) }
 }
 
@@ -1192,7 +1192,7 @@ macro_rules! jni_wrapper_cliche_impl {
             }
 
             fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
-                jni::objects::JValue::from(*tmp)
+                jni::objects::JValue::from($crate::wrap_jobject(*tmp))
             }
         }
 
@@ -1206,7 +1206,7 @@ macro_rules! jni_wrapper_cliche_impl {
             }
 
             fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
-                jni::objects::JValue::from(*tmp)
+                jni::objects::JValue::from($crate::wrap_jobject(*tmp))
             }
         }
 
@@ -1294,7 +1294,7 @@ macro_rules! jni_wrapper_cliche_impl_T {
             }
 
             fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
-                jni::objects::JValue::from(*tmp)
+                jni::objects::JValue::from($crate::wrap_jobject(*tmp))
             }
         }
 
@@ -1310,7 +1310,7 @@ macro_rules! jni_wrapper_cliche_impl_T {
             }
 
             fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
-                jni::objects::JValue::from(*tmp)
+                jni::objects::JValue::from($crate::wrap_jobject(*tmp))
             }
         }
 
