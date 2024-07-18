@@ -5,18 +5,12 @@ still need to learn from
 https://github.com/dtolnay/syn/blob/master/examples/lazy-static/lazy-static/src/lib.rs
  */
 
-extern crate proc_macro;
-#[macro_use]
-extern crate syn;
-extern crate jni_boilerplate_helper;
-extern crate proc_macro2;
-#[macro_use]
-extern crate quote;
-
 use proc_macro::{Span, TokenStream};
 use proc_macro2::Ident;
+use quote::quote;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::token::Comma;
+use syn::{parenthesized, Token};
 use syn::{Expr, FnArg, Lifetime, ReturnType, Type, TypeTuple};
 
 //
@@ -410,7 +404,7 @@ fn simple_identifier(name: &str) -> Ident {
 /// example:
 /// ```
 /// use jni_boilerplate::jni_static_method;
-/// use jni_boilerplate_helper::jni_wrapper_cliche_impl;
+/// use jni_boilerplate_helper::{jni,jni_wrapper_cliche_impl};
 /// jni_wrapper_cliche_impl!{ DogWrapper, "com/example/Dog" }
 /// impl<'a:'b, 'b> DogWrapper<'a, 'b> {
 ///     jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a, 'b> }
@@ -718,7 +712,7 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
 #[cfg(test)]
 mod test {
     use crate::is_mut_ref;
-    use syn::Type;
+    use syn::{parse_quote, Type};
 
     #[test]
     fn test1() -> Result<(), syn::Error> {

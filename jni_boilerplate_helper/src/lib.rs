@@ -3,11 +3,11 @@
 use log::debug;
 
 #[cfg(feature = "jni_0_18")]
-use jni_018plus as jni;
+pub use jni_018plus as jni;
 #[cfg(feature = "jni_0_20")]
-use jni_020plus as jni;
+pub use jni_020plus as jni;
 #[cfg(not(any(feature = "jni_0_18", feature = "jni_0_20")))]
-use jni_old as jni;
+pub use jni_old as jni;
 
 use crate::array_copy_back::*;
 use java_runtime_wrappers::class_is_array;
