@@ -1,8 +1,9 @@
 /// This is just where I stash some helper functions for calling important stuff in the java runtime
 use crate::{jni, wrap_jobject};
-use jni::objects::{JObject, JValue};
+use jni::objects::JObject;
 use jni::sys::jobject;
 use jni::JNIEnv;
+use jni_latest::objects::{JThrowable, JValueOwned};
 
 /// class_object is an instance of java.lang.Class
 pub fn class_is_array(je: &JNIEnv, class_object: &JObject) -> Result<bool, jni::errors::Error> {
@@ -10,21 +11,26 @@ pub fn class_is_array(je: &JNIEnv, class_object: &JObject) -> Result<bool, jni::
     rval.z()
 }
 
-#[cfg(not(feature = "jni_0_20"))]
-pub fn jni_workaround_jvalue<'a>(val: jobject) -> JValue<'a> {
+#[cfg(not(any(feature = "jni_0_20", feature = "jni_latest")))]
+pub fn jni_workaround_jvalue<'a>(val: jobject) -> JValue<'a, 'a> {
     JValue::from(val)
 }
 
 #[cfg(feature = "jni_0_20")]
-pub fn jni_workaround_jvalue<'a>(val: jobject) -> JValue<'a> {
+pub fn jni_workaround_jvalue<'a>(val: jobject) -> JValue<'a, 'a> {
     JValue::Object(wrap_jobject(val))
+}
+
+#[cfg(feature = "jni_latest")]
+pub fn jni_workaround_jvalue<'a>(val: jobject) -> JValueOwned<'a> {
+    JValueOwned::Object(wrap_jobject(val))
 }
 
 //
 
 pub struct Throwable<'a: 'b, 'b> {
     #[allow(dead_code)]
-    java_this: jni::objects::AutoLocal<'a, 'b>,
+    java_this: jni::objects::AutoLocal<'a, JObject<'a>>,
     #[allow(dead_code)]
     jni_env: &'b jni::JNIEnv<'a>,
 }
@@ -32,7 +38,7 @@ pub struct Throwable<'a: 'b, 'b> {
 impl<'a, 'b> Throwable<'a, 'b> {
     pub fn null(jni_env: &'b jni::JNIEnv<'a>) -> Throwable<'a, 'b> {
         Throwable {
-            java_this: jni::objects::AutoLocal::new(jni_env, jni::objects::JObject::null()),
+            java_this: jni_env.auto_local(jni::objects::JObject::null()),
             jni_env,
         }
     }
@@ -49,7 +55,7 @@ impl<'a, 'b> crate::JavaClassNameFor for Throwable<'a, 'b> {
 impl<'a, 'b> crate::JavaConstructible<'a, 'b> for Throwable<'a, 'b> {
     fn wrap_jobject(
         jni_env: &'b jni::JNIEnv<'a>,
-        java_this: jni::objects::AutoLocal<'a, 'b>,
+        java_this: jni::objects::AutoLocal<'a, JObject<'a>>,
     ) -> Self {
         Throwable { java_this, jni_env }
     }
@@ -61,7 +67,7 @@ impl<'a, 'b> crate::JavaSignatureFor for Throwable<'a, 'b> {
     }
 }
 
-impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for Throwable<'a, 'b> {
+/*impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for Throwable<'a, 'b> {
     type T = jni::sys::jobject;
     fn into_temporary(
         &self,
@@ -70,18 +76,18 @@ impl<'a: 'b, 'b> crate::ConvertRustToJValue<'a, 'b> for Throwable<'a, 'b> {
         Ok(*self.java_this.as_obj())
     }
 
-    fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a> {
-        JValue::from(wrap_jobject(*tmp))
+    fn temporary_into_jvalue(tmp: &Self::T) -> jni::objects::JValue<'a, 'a> {
+        JValue::from(*tmp)
     }
 }
 
 impl<'a: 'b, 'b> crate::ConvertJValueToRust<'a, 'b> for Throwable<'a, 'b> {
     fn to_rust(
         jni_env: &'b jni::JNIEnv<'a>,
-        val: jni::objects::JValue<'a>,
+        val: jni::objects::JValueOwned<'a>,
     ) -> Result<Self, jni::errors::Error> {
         Ok(Throwable {
-            java_this: jni::objects::AutoLocal::new(jni_env, val.l()?),
+            java_this: jni_env.auto_local(val.l()?.into()),
             jni_env,
         })
     }
@@ -94,9 +100,9 @@ impl Throwable<'_, '_> {
         #[cfg(debug_assertions)]
         crate::panic_if_bad_sigs(&[<() as JavaSignatureFor>::signature_for()]);
         let sig = String::from("(") + ")" + &<() as JavaSignatureFor>::signature_for();
-        let results =
-            self.jni_env
-                .call_method(self.java_this.as_obj(), "printStackTrace", sig, &[])?;
+        let results = self
+            .jni_env
+            .call_method(self.java_this, "printStackTrace", sig, &[])?;
         <() as ConvertJValueToRust>::to_rust(self.jni_env, results)
     }
 }
