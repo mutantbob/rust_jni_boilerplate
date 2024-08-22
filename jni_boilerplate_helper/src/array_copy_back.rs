@@ -1,11 +1,10 @@
-use crate::{jni, u32_to_char, wrap_jobject};
-use jni::objects::JValue;
+use crate::{u32_to_char, wrap_jobject};
+use jni::objects::{
+    JBooleanArray, JByteArray, JCharArray, JDoubleArray, JFloatArray, JIntArray, JLongArray,
+    JPrimitiveArray, JShortArray, JValue, TypeArray,
+};
 use jni::sys::{jboolean, jchar, jsize};
 use jni::JNIEnv;
-use jni_latest::objects::{
-    JBooleanArray, JByteArray, JCharArray, JDoubleArray, JFloatArray, JIntArray, JLongArray,
-    JShortArray,
-};
 use log::debug;
 
 //
@@ -34,7 +33,7 @@ impl<'a, 'b, 'c> ArrayCopyBackBool<'a, 'b, 'c> {
 impl<'a, 'b, 'c> Drop for ArrayCopyBackBool<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackBool drop()");
-        move_jbooleanarray_to_bool_array(self.env, self.array, self.src);
+        move_jbooleanarray_to_bool_array(self.env, kludge_take(&mut self.array), self.src);
     }
 }
 
@@ -46,7 +45,7 @@ pub fn copy_bool_array_to_jbooleanarray<'a>(
 ) -> Result<JBooleanArray<'a>, jni::errors::Error> {
     let array = env.new_boolean_array(src.len() as jsize)?;
     let tmp: Vec<jboolean> = src.iter().map(|x| if *x { 1 } else { 0 }).collect();
-    env.set_boolean_array_region(array, 0, &tmp)?;
+    env.set_boolean_array_region(&array, 0, &tmp)?;
     Ok(array)
 }
 
@@ -87,7 +86,9 @@ impl<'a, 'b, 'c> ArrayCopyBackChar<'a, 'b, 'c> {
 impl<'a, 'b, 'c> Drop for ArrayCopyBackChar<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackChar drop()");
-        if let Err(e) = move_jchararray_to_char_array(self.env, self.array, self.src) {
+        if let Err(e) =
+            move_jchararray_to_char_array(self.env, kludge_take(&mut self.array), self.src)
+        {
             debug!("how did move_jchararray_to_char_array fail? {:?}", e);
         }
     }
@@ -103,7 +104,7 @@ pub fn copy_char_array_to_jchararray<'a>(
 ) -> Result<JCharArray<'a>, jni::errors::Error> {
     let rval: JCharArray = je.new_char_array(src.len() as jsize)?;
     let other: Vec<jchar> = src.iter().map(|x| *x as jchar).collect();
-    je.set_char_array_region(rval, 0, &other)?;
+    je.set_char_array_region(&rval, 0, &other)?;
     Ok(rval)
 }
 
@@ -136,7 +137,7 @@ impl<'a, 'b, 'c> ArrayCopyBackInt<'a, 'b, 'c> {
         env: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackInt<'a, 'b, 'c>, jni::errors::Error> {
         let array = env.new_int_array(src.len() as jsize)?;
-        env.set_int_array_region(array, 0, src)?;
+        env.set_int_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackInt { array, src, env })
     }
 
@@ -148,10 +149,10 @@ impl<'a, 'b, 'c> ArrayCopyBackInt<'a, 'b, 'c> {
 impl<'a, 'b, 'c> Drop for ArrayCopyBackInt<'a, 'b, 'c> {
     fn drop(&mut self) {
         self.env
-            .get_int_array_region(self.array, 0, self.src)
+            .get_int_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(self.array)
+            .delete_local_ref(kludge_take(&mut self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -170,7 +171,7 @@ impl<'a, 'b, 'c> ArrayCopyBackShort<'a, 'b, 'c> {
         env: &'b JNIEnv<'a>,
     ) -> Result<ArrayCopyBackShort<'a, 'b, 'c>, jni::errors::Error> {
         let array = env.new_short_array(src.len() as jsize)?;
-        env.set_short_array_region(array, 0, src)?;
+        env.set_short_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackShort { array, src, env })
     }
 
@@ -182,10 +183,10 @@ impl<'a, 'b, 'c> ArrayCopyBackShort<'a, 'b, 'c> {
 impl<'a, 'b, 'c> Drop for ArrayCopyBackShort<'a, 'b, 'c> {
     fn drop(&mut self) {
         self.env
-            .get_short_array_region(self.array, 0, self.src)
+            .get_short_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(self.array)
+            .delete_local_ref(kludge_take(&mut self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -205,7 +206,7 @@ impl<'a, 'b, 'c> ArrayCopyBackByte<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackByte<'a, 'b, 'c>, jni::errors::Error> {
         //println!("ArrayCopyBackByte::new()");
         let array = env.new_byte_array(src.len() as jsize)?;
-        env.set_byte_array_region(array, 0, src)?;
+        env.set_byte_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackByte { array, src, env })
     }
 
@@ -218,10 +219,10 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackByte<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackByte drop()");
         self.env
-            .get_byte_array_region(self.array, 0, self.src)
+            .get_byte_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(self.array)
+            .delete_local_ref(kludge_take(&mut self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -241,7 +242,7 @@ impl<'a, 'b, 'c> ArrayCopyBackLong<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackLong<'a, 'b, 'c>, jni::errors::Error> {
         //println!("ArrayCopyBackLong::new()");
         let array = env.new_long_array(src.len() as jsize)?;
-        env.set_long_array_region(array, 0, src)?;
+        env.set_long_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackLong { array, src, env })
     }
 
@@ -254,10 +255,10 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackLong<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackLong drop()");
         self.env
-            .get_long_array_region(self.array, 0, self.src)
+            .get_long_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
-            .delete_local_ref(self.array)
+            .delete_local_ref(kludge_take(&mut self.array))
             .expect("how did delete_local_ref() fail?");
     }
 }
@@ -277,7 +278,7 @@ impl<'a, 'b, 'c> ArrayCopyBackFloat<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackFloat<'a, 'b, 'c>, jni::errors::Error> {
         //println!("ArrayCopyBackFloat::new()");
         let array = env.new_float_array(src.len() as jsize)?;
-        env.set_float_array_region(array, 0, src)?;
+        env.set_float_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackFloat { array, src, env })
     }
 
@@ -290,12 +291,21 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackFloat<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackFloat drop()");
         self.env
-            .get_float_array_region(self.array, 0, self.src)
+            .get_float_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
+        let array = kludge_take(&mut self.array);
         self.env
-            .delete_local_ref(self.array)
+            .delete_local_ref(array)
             .expect("how did delete_local_ref() fail?");
     }
+}
+
+/// # deprecated
+/// I use this in Drop implementation so I can delete_local_ref.  There is probably a better way?
+fn kludge_take<'a, T: TypeArray>(arg: &mut JPrimitiveArray<'a, T>) -> JPrimitiveArray<'a, T> {
+    std::mem::replace(arg, unsafe {
+        JPrimitiveArray::from_raw(std::ptr::null_mut())
+    })
 }
 
 //
@@ -313,7 +323,7 @@ impl<'a, 'b, 'c> ArrayCopyBackDouble<'a, 'b, 'c> {
     ) -> Result<ArrayCopyBackDouble<'a, 'b, 'c>, jni::errors::Error> {
         //println!("ArrayCopyBackDouble::new()");
         let array = env.new_double_array(src.len() as jsize)?;
-        env.set_double_array_region(array, 0, src)?;
+        env.set_double_array_region(&array, 0, src)?;
         Ok(ArrayCopyBackDouble { array, src, env })
     }
 
@@ -326,7 +336,7 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackDouble<'a, 'b, 'c> {
     fn drop(&mut self) {
         //println!("ArrayCopyBackDouble drop()");
         self.env
-            .get_double_array_region(self.array, 0, self.src)
+            .get_double_array_region(&self.array, 0, self.src)
             .expect("how did the get_int_array_region fail?");
         self.env
             .delete_local_ref(wrap_jobject(self.array.as_raw()))
