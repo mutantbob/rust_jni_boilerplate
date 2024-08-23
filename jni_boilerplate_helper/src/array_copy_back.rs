@@ -302,7 +302,9 @@ impl<'a, 'b, 'c> Drop for ArrayCopyBackFloat<'a, 'b, 'c> {
 
 /// # deprecated
 /// I use this in Drop implementation so I can delete_local_ref.  There is probably a better way?
-fn kludge_take<'a, T: TypeArray>(arg: &mut JPrimitiveArray<'a, T>) -> JPrimitiveArray<'a, T> {
+pub(crate) fn kludge_take<'a, T: TypeArray>(
+    arg: &mut JPrimitiveArray<'a, T>,
+) -> JPrimitiveArray<'a, T> {
     std::mem::replace(arg, unsafe {
         JPrimitiveArray::from_raw(std::ptr::null_mut())
     })

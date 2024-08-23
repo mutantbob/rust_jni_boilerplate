@@ -98,7 +98,7 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
 
     let arg_sig = formal_parameters_tokens(&args_metadata);
 
-    let jni_env = self_jni_env();
+    let jni_env = jni_env_deref_mut();
 
     let decl: Vec<proc_macro2::TokenStream> =
         initializations_for_parameter_temporaries(&args_metadata, jni_env);
@@ -115,18 +115,20 @@ pub fn jni_instance_method(t_stream: TokenStream) -> TokenStream {
     #[cfg(debug_assertions)]
             jni_boilerplate_helper::panic_if_bad_sigs( &[ #(<#arg_types as JavaSignatureFor>::signature_for(),)* <#return_type as JavaSignatureFor>::signature_for() ] );
 
+            use std::ops::DerefMut;
+            let mut jni_env = self.jni_env.borrow_mut();
             #(#decl)*
 
             let sig = String::from("(") #(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")"+&<#return_type as JavaSignatureFor>::signature_for();
 
             let results =
-                self.jni_env.call_method(self.java_this.as_obj(), #java_name, sig,
+                jni_env.deref_mut().call_method(&self.java_this, #java_name, sig,
 
                                      &[#(#jvalue_param_array),*])
-                .clear_if_err(self.jni_env)?;
+                .clear_if_err(jni_env.deref_mut())?;
 
-            <#return_type as ConvertJValueToRust>::to_rust(self.jni_env, results)
-                    .clear_if_err(self.jni_env)
+            <#return_type as ConvertJValueToRust>::to_rust(jni_env.deref_mut(), results)
+                    .clear_if_err(jni_env.deref_mut())
         }
                 };
 
@@ -155,8 +157,8 @@ fn harvest_remainder_java_class_name(
     Ok(class_name)
 }
 
-fn self_jni_env() -> Expr {
-    let ts: proc_macro::TokenStream = quote! { self.jni_env }.into();
+fn jni_env_deref_mut() -> Expr {
+    let ts: proc_macro::TokenStream = quote! { jni_env.deref_mut() }.into();
     let expr: Expr = syn::parse_macro_input::parse::<Expr>(ts).expect("how could parsing fail?");
     expr
 }
@@ -306,7 +308,7 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
 
     let body = quote! {
         #[allow(non_snake_case)]
-        pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig)
+        pub fn #rust_name(jni_env: &#lifetime_b mut jni::JNIEnv<#lifetime_a>, #arg_sig)
         -> Result<Self, jni::errors::Error>
         {
                 use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
@@ -318,19 +320,16 @@ pub fn jni_constructor(t_stream: TokenStream) -> TokenStream {
             //struct AssertReturnJC<'a> where Self:JavaConstructible<'a> { phantom: &'a PhantomData<u8>};
                 let cls = jni_env.find_class(#class_name)
                     .clear_if_err(jni_env)?;
-                let cls = JClassWrapper {
-                    jni_env,
-                    cls,
-                };
+                let cls = JClassWrapper ::new(jni_env,cls);
 
                 #(#decl)*
 
                 let sig = String::from("(")#(+&<#arg_types as JavaSignatureFor>::signature_for())* + ")V";
 
-                let rval = jni_env.new_object(cls.cls, sig, &[#(#jvalue_param_array),*])
+                let rval = jni_env.new_object(&cls.cls, sig, &[#(#jvalue_param_array),*])
                     .clear_if_err(jni_env)?;
 
-                Ok(<Self as JavaConstructible>::wrap_jobject(jni_env, jni::objects::AutoLocal::new(&jni_env, rval)))
+                Ok(<Self as JavaConstructible>::wrap_jobject(jni_env, jni_env.auto_local(rval)))
         }
     };
 
@@ -406,9 +405,9 @@ fn simple_identifier(name: &str) -> Ident {
 /// use jni_boilerplate::jni_static_method;
 /// use jni_boilerplate_helper::{jni,jni_wrapper_cliche_impl};
 /// jni_wrapper_cliche_impl!{ DogWrapper, "com/example/Dog" }
-/// impl<'a:'b, 'b> DogWrapper<'a, 'b> {
-///     jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a, 'b> }
-///     jni_static_method! { 'a, 'b, rust_name=java_name(&str, i32) -> DogWrapper<'a, 'b> }
+/// impl<'a:'b, 'b> DogWrapper<'a> {
+///     jni_static_method! { 'a, 'b, functionName(&str, i32) -> DogWrapper<'a> }
+///     jni_static_method! { 'a, 'b, rust_name=java_name(&str, i32) -> DogWrapper<'a> }
 /// }
 /// ```
 #[proc_macro]
@@ -439,7 +438,7 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
 
     let body = quote! {
         #[allow(non_snake_case)]
-        pub fn #rust_name(jni_env: &#lifetime_b jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
+        pub fn #rust_name(jni_env: &#lifetime_b mut jni::JNIEnv<#lifetime_a>, #arg_sig) ->Result<#return_type, jni::errors::Error>
         {
             use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue, ConvertMutableRustToJValue,
                                          ConvertJValueToRust,JClassWrapper,JavaClassNameFor,ClearIfErr};
@@ -449,15 +448,12 @@ pub fn jni_static_method(t_stream: TokenStream) -> TokenStream {
 
             let cls = jni_env.find_class(&<Self>::java_class_name())
             .clear_if_err(jni_env)?;
-            let cls = JClassWrapper {
-                jni_env: &jni_env,
-                cls,
-            };
+            let cls = JClassWrapper ::new(jni_env,cls);
 
             #(#decl)*
             let sig = String::from("(")+#(&<#arg_types as JavaSignatureFor>::signature_for() +)*  ")"+&<#return_type as JavaSignatureFor>::signature_for();
 
-            let results = jni_env.call_static_method(cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])
+            let results = jni_env.call_static_method(&cls.cls, #java_name, sig, &[#(#jvalue_param_array),*])
             .clear_if_err(jni_env)?;
 
             <#return_type as ConvertJValueToRust>::to_rust(jni_env, results)
@@ -677,20 +673,25 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     pub fn #getter(&self) -> Result<#rust_type, jni::errors::Error> {
         use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
                                      ConvertJValueToRust,JClassWrapper,JavaClassNameFor,ClearIfErr};
-
+            use std::ops::DerefMut;
+            let mut jni_env = self.jni_env.borrow_mut();
     //panic!("pants")
-      <#rust_type as ConvertJValueToRust>::to_rust(self.jni_env,
-          self.jni_env.get_field(self.java_this.as_obj(), #java_name, #java_type)
-                .clear_if_err(self.jni_env)?)
+            let val = jni_env.deref_mut().get_field(&self.java_this, #java_name, #java_type)
+                .clear_if_err(jni_env.deref_mut())?;
+      <#rust_type as ConvertJValueToRust>::to_rust(jni_env.deref_mut(),
+          val)
     }
 
     pub fn #setter(&self, new_val: #rust_type) -> Result<(), jni::errors::Error>
+        where #rust_type: jni_boilerplate_helper::ConvertRustToJValue<'a>
     {
     use jni_boilerplate_helper::{ConvertRustToJValue,JavaSignatureFor, ClearIfErr};
-    let tmp = <#rust_type as ConvertRustToJValue>::into_temporary(&new_val, self.jni_env).clear_if_err(self.jni_env)?;
-    self.jni_env.set_field(self.java_this.as_obj(), #java_name,
+            use std::ops::DerefMut;
+        let mut jni_env = self.jni_env.borrow_mut();
+    let tmp = <#rust_type as ConvertRustToJValue>::into_temporary(&new_val, jni_env.deref_mut()).clear_if_err(jni_env.deref_mut())?;
+    jni_env.deref_mut().set_field(&self.java_this, #java_name,
     #java_type,
-    <&#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp)).clear_if_err(self.jni_env)
+    <#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp)).clear_if_err(jni_env.deref_mut())
     }
     };
 

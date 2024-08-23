@@ -42,12 +42,10 @@ impl<'a> crate::JavaClassNameFor for Throwable<'a> {
 
 impl<'a, 'b> crate::JavaConstructible<'a, 'b> for Throwable<'a> {
     fn wrap_jobject(
-        jni_env: &'b jni::JNIEnv<'a>,
+        _jni_env: &'b jni::JNIEnv<'a>,
         java_this: jni::objects::AutoLocal<'a, JObject<'a>>,
     ) -> Self {
-        Throwable {
-            java_this, /*jni_env*/
-        }
+        Throwable { java_this }
     }
 }
 
@@ -57,24 +55,21 @@ impl<'a> crate::JavaSignatureFor for Throwable<'a> {
     }
 }
 
-impl<'a2: 'b2, 'b2> crate::ConvertRustToJValue for Throwable<'a2> {
-    type T<'a: 'b, 'b> = AutoLocal<'a, JObject<'a>>;
-    fn into_temporary<'a1, 'b1>(
-        &self,
-        je: &'b1 mut JNIEnv<'a1>,
-    ) -> Result<Self::T<'a1, 'b1>, jni::errors::Error> {
+impl<'a> crate::ConvertRustToJValue<'a> for Throwable<'a> {
+    type T = AutoLocal<'a, JObject<'a>>;
+    fn into_temporary(&self, je: &mut JNIEnv<'a>) -> Result<Self::T, jni::errors::Error> {
         let x = je.new_local_ref(&self.java_this)?;
         Ok(je.auto_local(x))
     }
 
-    fn temporary_into_jvalue<'a1: 'b1, 'b1, 's>(tmp: &'s Self::T<'a1, 'b1>) -> JValue<'a1, 's> {
+    fn temporary_into_jvalue<'s>(tmp: &'s Self::T) -> JValue<'a, 's> {
         JValue::from(tmp)
     }
 }
 
-impl<'c> crate::ConvertJValueToRust for Throwable<'c> {
-    fn to_rust<'a, 'b>(
-        jni_env: &'b mut jni::JNIEnv<'a>,
+impl<'a> crate::ConvertJValueToRust<'a> for Throwable<'a> {
+    fn to_rust(
+        jni_env: &mut jni::JNIEnv<'a>,
         val: jni::objects::JValueOwned<'a>,
     ) -> Result<Self, jni::errors::Error> {
         Ok(Throwable {
