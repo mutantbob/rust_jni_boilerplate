@@ -42,7 +42,9 @@ impl Parse for MySignature {
 //
 
 struct InstanceMacroArguments {
+    #[allow(dead_code)] // XXX clean this up later
     pub lifetime_a: Lifetime,
+    #[allow(dead_code)] // XXX clean this up later
     pub lifetime_b: Lifetime,
     rust_name: Ident,
     java_name: String,
@@ -169,7 +171,7 @@ fn bare_jni_env() -> Expr {
     expr
 }
 
-#[proc_macro]
+/*#[proc_macro]
 pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
     let macro_args = syn::parse_macro_input!(t_stream as InstanceMacroArguments);
 
@@ -218,7 +220,7 @@ pub fn jni_unwrapped_instance_method(t_stream: TokenStream) -> TokenStream {
                 };
 
     body.into()
-}
+}*/
 
 //
 

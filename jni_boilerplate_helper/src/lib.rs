@@ -14,6 +14,8 @@ use jni::JNIEnv;
 use log::debug;
 
 pub mod array_copy_back;
+#[macro_export]
+pub mod atrocious_kludges;
 pub mod java_runtime_wrappers;
 
 pub struct JClassWrapper<'a, 'b> {
@@ -990,14 +992,6 @@ impl<T> ClearIfErr<T> for Result<T, Error> {
 
 //
 
-#[macro_export]
-macro_rules! kludge_mut_jnienv {
-    //XXX This is probably bad, but I haven't found a way round it yet
-    ($je:expr) => {
-        std::cell::RefCell::new(unsafe { $je.unsafe_clone() })
-    };
-}
-
 ///
 /// This creates a trivial rust struct for wrapping a java object reference.
 /// The struct will have two fields:
@@ -1019,7 +1013,7 @@ macro_rules! jni_wrapper_cliche_impl {
             #[allow(dead_code)]
             java_this: jni::objects::AutoLocal<'a, jni::objects::JObject<'a>>,
             #[allow(dead_code)]
-            jni_env: std::cell::RefCell<jni::JNIEnv<'a>>, //XXX This is probably bad, but I haven't found a way round it yet
+            jni_env: $crate::atrocious_kludges::KludgeJNIEnv<'a>, //XXX This is probably bad, but I haven't found a way round it yet
         }
 
         impl<'a> $ty<'a> {
