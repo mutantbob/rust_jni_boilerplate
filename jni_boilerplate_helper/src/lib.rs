@@ -14,7 +14,6 @@ use jni::JNIEnv;
 use log::debug;
 
 pub mod array_copy_back;
-#[macro_export]
 pub mod atrocious_kludges;
 pub mod java_runtime_wrappers;
 
@@ -459,7 +458,7 @@ impl<'a, T: JValueNonScalar + ConvertJValueToRust<'a>> ConvertJValueToRust<'a> f
 /// In most cases the type of T should be AutoLocal<'a,'b>
 pub trait ConvertRustToJValue<'a> {
     type T;
-    fn into_temporary<'b>(&self, je: &mut JNIEnv<'a>) -> Result<Self::T, jni::errors::Error>;
+    fn into_temporary(&self, je: &mut JNIEnv<'a>) -> Result<Self::T, jni::errors::Error>;
     // tmp is borrowed, so that the value doesn't get dropped before the temporary is used.
     fn temporary_into_jvalue<'s>(tmp: &'s Self::T) -> JValue<'a, 's>;
 }

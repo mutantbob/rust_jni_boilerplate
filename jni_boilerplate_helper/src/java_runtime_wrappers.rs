@@ -73,7 +73,7 @@ impl<'a> crate::ConvertJValueToRust<'a> for Throwable<'a> {
         val: jni::objects::JValueOwned<'a>,
     ) -> Result<Self, jni::errors::Error> {
         Ok(Throwable {
-            java_this: jni_env.auto_local(val.l()?.into()),
+            java_this: jni_env.auto_local(val.l()?),
             // jni_env,
         })
     }
