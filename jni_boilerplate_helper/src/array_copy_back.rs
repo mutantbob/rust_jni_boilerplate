@@ -44,7 +44,7 @@ pub fn copy_bool_array_to_jbooleanarray<'a>(
     src: &[bool],
 ) -> Result<JBooleanArray<'a>, jni::errors::Error> {
     let array = env.new_boolean_array(src.len() as jsize)?;
-    let tmp: Vec<jboolean> = src.iter().map(|x| if *x { 1 } else { 0 }).collect();
+    let tmp: Vec<jboolean> = src.iter().map(|x| u8::from(*x)).collect();
     env.set_boolean_array_region(&array, 0, &tmp)?;
     Ok(array)
 }

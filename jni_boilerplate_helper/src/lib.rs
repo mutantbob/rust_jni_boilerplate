@@ -554,6 +554,7 @@ impl<'a> ConvertRustToJValue<'a> for &[bool] {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn wrap_jobject<'a>(rval: jobject) -> JObject<'a> {
     unsafe { JObject::from_raw(rval) }
 }
