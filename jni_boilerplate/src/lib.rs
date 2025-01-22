@@ -595,8 +595,13 @@ fn parse_optional_lifetimes(tokens: &ParseBuffer) -> Result<(Lifetime, Lifetime)
     if tokens.peek(Lifetime) {
         let lifetime_a = tokens.parse()?;
         let _comma: Token![,] = tokens.parse()?;
-        let lifetime_b = tokens.parse()?;
-        let _comma: Token![,] = tokens.parse()?;
+        let lifetime_b = if tokens.peek(Lifetime) {
+            let rval = tokens.parse()?;
+            let _comma: Token![,] = tokens.parse()?;
+            rval
+        } else {
+            Lifetime::new("'_", proc_macro2::Span::call_site())
+        };
         Ok((lifetime_a, lifetime_b))
     } else {
         let wildcard: Lifetime = Lifetime::new("'_", proc_macro2::Span::call_site());
