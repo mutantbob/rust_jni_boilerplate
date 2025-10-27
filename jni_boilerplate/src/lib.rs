@@ -707,6 +707,129 @@ pub fn jni_field(t_stream: TokenStream) -> TokenStream {
     body.into()
 }
 
+struct StaticFieldArgs {
+    const_: bool,
+    rust_name: Ident,
+    java_name: String,
+    rust_type: Type,
+    java_type: Option<String>,
+}
+
+impl Parse for StaticFieldArgs {
+    fn parse(input: &ParseBuffer) -> Result<Self, syn::Error> {
+        let const_ = if input.peek(Token![const]) {
+            let _: Token![const] = input.parse()?;
+            true
+        } else {
+            false
+        };
+        let rust_name: Ident = input.parse()?;
+        let java_name: String = if input.peek(Token![=]) {
+            let _eq: Token![=] = input.parse()?;
+            let java_name: Ident = input.parse()?;
+            java_name.to_string()
+        } else {
+            rust_name.to_string()
+        };
+        let _colon: Token![:] = input.parse()?;
+        let rust_type = input.parse()?;
+        let java_type = if input.peek(Token![=]) {
+            let _eq: Token![=] = input.parse()?;
+            let ident: Ident = input.parse()?;
+            let java_name = harvest_remainder_java_class_name(input, ident.to_string())?;
+            Some(java_name)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            const_,
+            rust_name,
+            java_name,
+            rust_type,
+            java_type,
+        })
+    }
+}
+
+/// # Examples
+/// ```
+/// impl MyClass<'a> {
+///     jni_static_field!{ const xform: AffineTransform }
+///     jni_static_field!{ final transform=xform: AffineTransform }
+/// }
+/// ```
+#[proc_macro]
+pub fn jni_static_field(t_stream: TokenStream) -> TokenStream {
+    let macro_args = syn::parse_macro_input!(t_stream as StaticFieldArgs);
+    let rust_name = macro_args.rust_name;
+    let java_name = macro_args.java_name;
+    let rust_type = macro_args.rust_type;
+
+    let getter = Ident::new(&format!("get_{}", rust_name), rust_name.span());
+
+    let java_type = match macro_args.java_type {
+        None => {
+            quote! {
+                        {
+            #[cfg(debug_assertions)]
+                        jni_boilerplate_helper::panic_if_bad_sigs( &[ <#rust_type as JavaSignatureFor>::signature_for() ] );
+
+                        <#rust_type as JavaSignatureFor>::signature_for()} }
+        }
+        Some(ty) => {
+            let ty = format!("L{};", ty);
+            quote! { #ty }
+        }
+    };
+
+    let getter = quote! {
+        #[allow(non_snake_case)]
+    pub fn #getter(mut jni_env: &mut JNIEnv) -> Result<#rust_type, jni::errors::Error> {
+        use jni_boilerplate_helper::{JavaSignatureFor, ConvertRustToJValue,
+                                     ConvertJValueToRust,JClassWrapper,JavaClassNameFor,ClearIfErr};
+            use std::ops::DerefMut;
+
+            let cls = <Self as JavaClassNameFor>::java_class_name();
+            let cls = jni_env.find_class(cls)
+            .clear_if_err(jni_env)?;
+            let cls = JClassWrapper ::new(jni_env,cls);
+
+            let val = jni_env.deref_mut().get_static_field(&cls.cls, #java_name, #java_type)
+                .clear_if_err(jni_env.deref_mut())?;
+      <#rust_type as ConvertJValueToRust>::to_rust(jni_env.deref_mut(),
+          val)
+    }
+    };
+
+    let body = if macro_args.const_ {
+        getter
+    } else {
+        let setter = Ident::new(&format!("set_{}", rust_name), rust_name.span());
+
+        quote! {
+        #getter
+
+        #[allow(non_snake_case)]
+        pub fn #setter(mut jni_env: &mut JNIEnv, new_val: #rust_type) -> Result<(), jni::errors::Error>
+            where #rust_type: jni_boilerplate_helper::ConvertRustToJValue<'a>
+        {
+        use jni_boilerplate_helper::{ConvertRustToJValue,JavaSignatureFor, ClearIfErr};
+                use std::ops::DerefMut;
+        let tmp = <#rust_type as ConvertRustToJValue>::into_temporary(&new_val, jni_env.deref_mut()).clear_if_err(jni_env.deref_mut())?;
+            let cls = <Self as JavaClassNameFor>::java_class_name();
+        jni_env.deref_mut().set_static_field(cls, #java_name,
+        //#java_type,
+        <#rust_type as ConvertRustToJValue>::temporary_into_jvalue(&tmp)).clear_if_err(jni_env.deref_mut())
+        }
+        }
+    };
+
+    //println!("body = {}", body);
+
+    body.into()
+}
+
 /*
   pub fn get_xform(&self) -> Result<AffineTransform<'a, 'b>, jni::errors::Error> {
        ConvertJValueToRust::to_rust(self.jni_env,
